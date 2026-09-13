@@ -1,0 +1,405 @@
+BRASSLINE 0.7.1 verification - 2026-09-13
+
+349 assertions across gameplay, progression, settings, maps, capacity, networking, prediction and lag compensation.
+Native Godot on Linux; Windows executables validated by pinned hash and PE structure at packaging.
+
+Prediction stress: 150 ms one-way delay, +/-40 ms per-direction jitter, 10% configured random loss, client rendering capped at 30 FPS.
+Lag-compensation stress: same network settings, aiming directly at a moving opponent.
+Basic network regression: 40 ms one-way, +/-10 ms jitter, 2% configured random loss.
+
+game071.log
+PASS Owner takes no blast damage
+PASS Teammate takes no blast damage
+PASS Enemy takes blast damage
+PASS Blast radius is bounded
+PASS Blast is lethal throughout its five meter radius
+PASS Perfect timing window is bounded
+PASS A future jump cannot earn a boost
+PASS Timed jump gives more lift and distance
+PASS Blast placement controls launch direction
+PASS Launch velocity respects caps
+PASS Out of range blast cannot launch player
+PASS Solid wall blocks a pistol headshot
+PASS Pistol kills with an exposed airborne headshot
+PASS Airborne headshot is recorded
+PASS Pistol body damage is 40, not lethal
+PASS Four rifle body hits eliminate 100 health
+PASS Friendly gunfire does not damage teammate
+PASS Pistol cooldown prevents rapid second shot
+PASS Weapon switching cannot bypass shot cooldown
+PASS Empty rifle starts a real reload
+PASS Canceling reload does not grant free ammunition
+PASS Live explosion launches owner without injury
+PASS Solid cover also blocks blast damage
+PASS Only one blast grenade until refill
+PASS Practice refill restores both grenades
+PASS Practice reset clears effects and score
+PASS Simulated grenade jump remains free of self damage
+PASS Real grenade fuse resolves and deletes projectile
+PASS Jump shortly before live fuse produces a perfect boost
+PASS Actual jump trajectory rises above normal jumping height
+PASS Smoke grenade creates temporary visual cover
+PASS Ground release stops full speed within 70ms
+PASS Counter strafe brakes faster than releasing the key
+PASS Air strafe adds side speed while preserving forward momentum
+PASS Holding forward alone cannot endlessly accelerate in air
+PASS Rifle accuracy recovers when movement stops
+PASS Blast jump pistol remains accurate in air
+PASS Sniper earns precise quickscope accuracy after 120ms
+PASS Mouse wheel down and space are both bound to jump
+PASS Weapon rendering uses an isolated world, preventing cover clipping
+PASS Equipping grenade neither spends it nor starts a fuse
+PASS Equipped grenade replaces the visible gun
+PASS Short toss drops downward and returns to previous weapon
+PASS Long throw travels faster than underhand drop
+PASS Rifle now kills with one headshot
+PASS One sniper round kills two aligned bodies in a collateral
+PASS Collateral entries share a kill feed highlight
+PASS Sniper penetrates a target but stops at the wall behind it
+PASS Feed retains four primary entries and two fading overflow entries
+PASS Displaced feed entries finish fading
+PASS Old feed entries expire
+PASS Reload visibly removes the magazine
+PASS Reload cancel restores visual pose without granting ammo
+PASS Live movement release stops without a long slide
+PASS Buffered landing jump preserves momentum for bunny hopping
+PASS G input equips grenade and waits for a click
+PASS Right-click input throws the equipped grenade
+PASS Live scope input reaches precise zoom without a long settle delay
+PASS Sniper reload completes and restores its six-round magazine
+PASS Releasing aim clears scope and restores the weapon view
+PASS Live explosion kills an exposed enemy 4.8 meters away
+PASS New headshot crunch and sniper audio load from the portable assets
+RESULT 62/62 checks passed
+
+combat071.log
+PASS Training opens with passive targets and no combat bots
+PASS Combat creates exactly nine bots
+PASS Roster is player plus four allies versus five enemies
+PASS Combat uses four fixed spawn zones
+PASS Ground navigation has a usable route graph
+PASS Bots route around the wall instead of walking through it
+PASS Initial spawns do not overlap teammates or enemies
+PASS Friendly bullets cannot damage the player
+PASS Enemy bullets remove real player health
+PASS Lethal damage records death and queues an immediate respawn
+PASS Dead player cannot fire or throw grenades
+PASS Enemy kill updates its team score and feed without granting a player kill
+PASS Player respawns within two frames with collision and a full six-round sniper
+PASS A just-respawned player is immediately vulnerable
+PASS Training refill is disabled during combat
+PASS Spawn selection avoids a crowded enemy-controlled corner
+PASS Bots cannot see through solid cover
+PASS Unobstructed opponents are visible
+PASS Smoke blocks bot target acquisition
+PASS A killed bot leaves combat collision
+PASS Bot respawns within two frames without adding duplicate actors
+PASS Sniper fires one of its six rounds
+PASS Sniper fires one bolt-open and one bolt-close audio cue
+PASS Rechamber cycle completes before the next shot
+PASS Actual bot sight, aim and rifle rays can kill the human player
+PASS Live bots acquire opponents, fire and deal damage
+PASS Both teams earn kills in an actual skirmish
+PASS Endless play continues through repeated respawns with a stable roster
+PASS No score or timer limit ends the skirmish
+PASS Pause freezes bot firing and the game clock
+PASS Returning to training removes bots and restores the original arena
+PASS Aim training remains non-hostile
+PASS Starting another combat arena resets its roster and stats
+RESULT 33/33 combat checks passed
+
+progression071.log
+PASS Ten real player profiles start at level one
+PASS Normal kill awards 50
+PASS Headshot plus one-shot awards 100 total
+PASS Full-health one-shot awards 100
+PASS Scoreboard records kills and deaths
+PASS Bot kill records death without removing earned XP
+PASS Four rapid sniper kills stack 400 points
+PASS No premature tier bonuses
+PASS Multi settles for 100 while base animation finishes
+PASS Separate 100 bonus follows the 400 stack
+PASS Repeated updates cannot pay twice
+PASS 1-kill chain awards only its highest tier
+PASS 2-kill chain awards only its highest tier
+PASS 2-kill chain has one additional animation
+PASS 3-kill chain awards only its highest tier
+PASS 3-kill chain has one additional animation
+PASS 4-kill chain awards only its highest tier
+PASS 4-kill chain has one additional animation
+PASS 5-kill chain awards only its highest tier
+PASS 5-kill chain has one additional animation
+PASS Collateral victims count once each
+PASS Death preserves base and bonus presentations
+PASS Death settles an earned double bonus
+PASS Post-respawn kill starts a new chain
+PASS Earlier bonus survives a new post-respawn kill
+PASS New chain receives its own animation
+PASS Overlapping rewards drain with exact XP
+PASS Mode reset keeps XP and resets K/D
+PASS Fresh progression model has no implicit disk access
+PASS Kill on chain boundary counts
+PASS Longer gap starts a fresh chain
+PASS Level-two boundary is exact
+PASS Level 1000 requires 25,199,775 XP
+PASS Max-level boundary is exact
+PASS Bonus can cause a level-up
+PASS Bonus respects level cap
+PASS Tab opens scoreboard
+PASS Live sniper body kill earns one-shot XP
+PASS Wounded-target body finish earns 50
+PASS Live scoreboard matches actual kills
+PASS Live immediate respawn retains animation
+PASS Bonus plays after actual respawn
+PASS Changing to a new map preserves session XP and rewards
+PASS Sniper stays scoped through animated bolt cycle
+PASS Gun overlay stays hidden while scoped
+PASS Releasing aim restores gun
+PASS Firing drives the recoil spring
+PASS Recoil settles and spent casings expire
+RESULT 48/48 progression checks passed
+
+settings071.log
+PASS Atomic profile save succeeds
+PASS Reload restores XP and stable local identity
+PASS Settings reload with original values
+PASS Corrupt primary profile recovers backup
+PASS Rebinding applies physical key
+PASS Scroll wheel can bind to any action
+PASS Taking menu key swaps displaced key to menu
+PASS Custom bindings persist on disk
+PASS Crouch reduces actual capsule height
+PASS Head hitbox follows crouch
+PASS Cannot stand through a low ceiling
+PASS Standing resumes when overhead clearance returns
+PASS Low quality disables multisampling
+PASS High quality enables multisampling
+PASS Game saves live progression to profile
+SETTINGS_RESULT 15/15
+
+expansion071_verified.log
+PASS Original Foundry plus three selectable maps
+PASS FOUNDRY YARD: transition completes
+PASS FOUNDRY YARD: correct 5v5 roster
+PASS FOUNDRY YARD: all four spawn zones have capsule clearance
+PASS FOUNDRY YARD: all spawn corners are connected by ground routes
+PASS FOUNDRY YARD: patrol graph has no isolated pockets
+PASS FOUNDRY YARD: assault, flanker and marksman profiles present
+PASS FOUNDRY YARD: variants retain 100 health and articulated limbs
+PASS FOUNDRY YARD: bots navigate, acquire and fight
+PASS FOUNDRY YARD: kills and instant respawns sustain combat
+PASS FOUNDRY YARD: cosmetic effects stay bounded
+PASS FOUNDRY YARD: instant unshielded player respawn
+PASS FOUNDRY YARD: damage works immediately after respawn
+PASS FOUNDRY YARD: passive training mode works
+PASS FOUNDRY YARD: practice targets stand outside solid geometry
+PASS DRY DOCK: transition completes
+PASS DRY DOCK: correct 5v5 roster
+PASS DRY DOCK: all four spawn zones have capsule clearance
+PASS DRY DOCK: all spawn corners are connected by ground routes
+PASS DRY DOCK: patrol graph has no isolated pockets
+PASS DRY DOCK: assault, flanker and marksman profiles present
+PASS DRY DOCK: variants retain 100 health and articulated limbs
+PASS DRY DOCK: bots navigate, acquire and fight
+PASS DRY DOCK: kills and instant respawns sustain combat
+PASS DRY DOCK: cosmetic effects stay bounded
+PASS DRY DOCK: instant unshielded player respawn
+PASS DRY DOCK: damage works immediately after respawn
+PASS DRY DOCK: passive training mode works
+PASS DRY DOCK: practice targets stand outside solid geometry
+PASS SUNSPIRE: transition completes
+PASS SUNSPIRE: correct 5v5 roster
+PASS SUNSPIRE: all four spawn zones have capsule clearance
+PASS SUNSPIRE: all spawn corners are connected by ground routes
+PASS SUNSPIRE: patrol graph has no isolated pockets
+PASS SUNSPIRE: assault, flanker and marksman profiles present
+PASS SUNSPIRE: variants retain 100 health and articulated limbs
+PASS SUNSPIRE: bots navigate, acquire and fight
+PASS SUNSPIRE: kills and instant respawns sustain combat
+PASS SUNSPIRE: cosmetic effects stay bounded
+PASS SUNSPIRE: instant unshielded player respawn
+PASS SUNSPIRE: damage works immediately after respawn
+PASS SUNSPIRE: passive training mode works
+PASS SUNSPIRE: practice targets stand outside solid geometry
+PASS RELAY: transition completes
+PASS RELAY: correct 5v5 roster
+PASS RELAY: all four spawn zones have capsule clearance
+PASS RELAY: all spawn corners are connected by ground routes
+PASS RELAY: patrol graph has no isolated pockets
+PASS RELAY: assault, flanker and marksman profiles present
+PASS RELAY: variants retain 100 health and articulated limbs
+PASS RELAY: bots navigate, acquire and fight
+PASS RELAY: kills and instant respawns sustain combat
+PASS RELAY: cosmetic effects stay bounded
+PASS RELAY: instant unshielded player respawn
+PASS RELAY: damage works immediately after respawn
+PASS RELAY: passive training mode works
+PASS RELAY: practice targets stand outside solid geometry
+PASS Surface footsteps distinguish deck, tile and concrete
+PASS Expanded foley and ambience load
+PASS DRY DOCK: player can walk up the ramp onto high ground
+PASS SUNSPIRE: player can walk up the ramp onto high ground
+PASS RELAY: player can walk up the ramp onto high ground
+RESULT 62/62 expansion checks passed
+
+capacity071.log
+PASS Capacity server starts
+PASS Human teams stay within one player throughout filling
+PASS Ten real processes occupy all ten slots
+PASS Full server is five humans versus five humans, zero bots
+PASS Eleventh human gets server-full message
+PASS Three players disconnect
+PASS Departures rebalance human teams to four versus three
+PASS Bots fill exactly the three vacant slots
+PASS Both teams retain exactly five total participants
+CAPACITY_RESULT 9/9
+PASS Human client joins
+PASS Remaining client stays connected through rebalance
+CAPACITY_RESULT 2/2
+PASS Human client joins
+PASS Departing client leaves cleanly
+CAPACITY_RESULT 2/2
+PASS Human client joins
+PASS Departing client leaves cleanly
+CAPACITY_RESULT 2/2
+PASS Human client joins
+PASS Remaining client stays connected through rebalance
+CAPACITY_RESULT 2/2
+PASS Human client joins
+PASS Departing client leaves cleanly
+CAPACITY_RESULT 2/2
+PASS Human client joins
+PASS Remaining client stays connected through rebalance
+CAPACITY_RESULT 2/2
+PASS Human client joins
+PASS Remaining client stays connected through rebalance
+CAPACITY_RESULT 2/2
+PASS Human client joins
+PASS Remaining client stays connected through rebalance
+CAPACITY_RESULT 2/2
+PASS Human client joins
+PASS Remaining client stays connected through rebalance
+CAPACITY_RESULT 2/2
+PASS Full server rejects extra connection
+PASS Full server explains why join failed
+CAPACITY_RESULT 2/2
+
+network071_final.log
+PASS Host creates real UDP server
+PASS Host fills 1 human / 9 bots
+PASS External process authenticates and replaces a bot
+PASS First friend joins opposing team: 1v1 humans, 4v4 bots
+PASS Client submits movement input
+PASS Host simulates remote movement within speed bounds
+PASS Crouch reaches server collider
+PASS Client releases movement
+PASS Server ray validates remote headshot and records kill
+PASS Host dies and instantly respawns without shield
+PASS Server awards exactly 100 headshot XP
+PASS Authoritative rifle magazine consumes one round
+PASS Client performs equip and short toss
+PASS Server owns a thrown grenade
+PASS Grenade inventory enforced on server
+PASS Client receives replicated grenade
+PASS Server grenade fuse resolves
+PASS 250th kill ends the round immediately
+PASS First to 250 wins with no extra score after end
+PASS Map vote crosses real RPC connection
+PASS One final vote per player; changed vote replaces previous
+PASS Winning map loads and next round starts
+PASS Client loads the same voted map
+PASS Map change preserves both humans and ten total actors
+PASS Next round resets team scores
+PASS Each round has a ten-minute maximum
+PASS Time limit ends round without a kill
+PASS Equal scores at time limit produce a draw
+PASS Disconnect removes remote human
+PASS Leaving player is replaced by a bot
+PASS Incorrect password rejected without consuming a slot
+PASS Rejected connection cannot enter roster
+PASS Previously disconnected client rejoins successfully
+PASS Rejoined client can leave again
+PASS Host can start another server without restarting game
+PASS New server starts with fresh scores and match state
+NETWORK_RESULT 36/36
+PASS Host available
+PASS Client completes real ENet handshake
+PASS Client receives repeated authoritative snapshots
+PASS Nine remote actors are rendered as replicas
+PASS Confirmed kill updates client scoreboard
+PASS Confirmed XP reaches client
+PASS Headshot feed identifies local killer
+PASS Server projectile appears on client
+PASS Client receives end-of-round and vote state
+PASS Client reloads voted arena without reconnecting
+PASS XP survives map rotation
+PASS Client gracefully disconnects
+PASS Confirmed multiplayer XP is saved to disk
+PASS Reconnect accepts a fresh life ID
+PASS Saved XP remains after rejoining
+NETWORK_RESULT 15/15
+PASS Wrong password is rejected
+PASS Useful password error is shown
+NETWORK_RESULT 2/2
+PROXY_METRICS {'packets': 287, 'dropped': 3, 'max_datagram': 984}
+
+prediction071_verified.log
+PASS Prediction host starts
+PASS Prediction client joins
+PASS Server movement stays within expected two-second run distance
+PASS Server receives jump under loss
+PASS Stale-life and malformed inputs cannot move the server player
+PASS Receiving input does not prematurely acknowledge simulation
+PASS Movement input is normalized and bounded
+PASS Flooding twelve inputs earns only one tick of movement
+PREDICTION_RESULT 8/8
+PASS Prediction client connects
+PASS Local movement begins within two physics ticks
+PREDICTION_METRICS distance=14.6250305175781 max_rollback=0.0 corrections=0
+PASS Straight movement has no visible backward corrections
+PASS Client settles within 12 cm of server
+PASS Jump begins locally without waiting for server
+JUMP_METRICS client_apex=31.0209369659424 server_apex=31.0209369659424
+PASS Jump prediction matches server within 15 cm
+PASS Aim/crouch/counter-strafe/air movement survive delayed reconciliation
+PASS Shot tracer, recoil and ammo respond before a server reply
+PASS Sniper stays scoped after its predicted shot
+PASS Shot acknowledgement neither refunds nor double-spends ammo
+PASS Reload begins locally without a round trip
+PASS Predicted reload settles to server's six-round magazine
+PASS Grenade appears on the throwing frame
+PASS Server confirms predicted grenade
+PASS Confirmation reuses the visual instead of duplicating the grenade
+PASS Cosmetic grenade prediction never changes health
+PASS Duplicate respawn messages do not reset the current life
+PASS Remote movement extrapolates beyond the newest sample without freezing
+PASS Remote extrapolation stops after 80 ms rather than running through the map
+PREDICTION_RESULT 19/19
+PROXY_METRICS {'packets': 1124, 'dropped': 105, 'max_datagram': 990}
+
+lagcomp071_stress.log
+PASS Lag compensation host starts
+PASS Delayed shooter connects
+PASS Aiming directly at the displayed moving target earns a server-confirmed kill
+PASS The same shot would miss the target's current position without rewind
+PASS Rewound damage is applied once to the correct living target
+PASS Historical sphere ray recognizes a headshot
+PASS History ray tests never teleport the live target
+PASS Current-time ray misses a target that has moved away
+PASS Historical box ray recognizes a body hit
+PASS Penetration exclusions prevent a second hit on the same target
+PASS Old-life history cannot damage a freshly respawned player
+PASS Future shot timestamps are clamped to server time
+PASS Unverified clients cannot request arbitrary historical times
+PASS History memory remains bounded
+PASS Solid walls block lag-compensated sniper shots
+PASS Friendly fire stays disabled during rewind
+LAG_COMPENSATION_RESULT 16/16
+PASS Lag compensation client joins
+PASS Moving-target shot draws immediately on the client
+PASS No manual lead: the target under the crosshair is killed
+PASS Lag-compensated one-shot kill awards confirmed XP
+LAG_COMPENSATION_RESULT 4/4
+PROXY_METRICS {'packets': 241, 'dropped': 25, 'max_datagram': 984}
+
+Rendered a real client joined to the dedicated server. Inspected the arena and ping/FPS/server-Hz HUD. Server log confirmed a human replacing one of ten bots and cleanly leaving. The renderer used software OpenGL here; its FPS is not a measurement of Windows gaming performance. No physical audio device was available; the renderer fell back to dummy audio.

@@ -1,0 +1,94 @@
+BRASSLINE 0.7.1 - HOSTING OVER THE INTERNET
+No paid service is required. Your PC runs the server while friends play.
+
+EASIEST SETUP: HOST & PLAY
+1. Everyone extracts the same 0.7.1 ZIP and runs START_BRASSLINE.bat.
+2. On your PC, choose the first map under PLAY. Open ONLINE.
+3. Choose your name, leave the port at 27020, and optionally set a password.
+4. Click HOST & PLAY. The address field is used only when joining.
+5. In your router, forward UDP port 27020 to your gaming PC's local IPv4
+   address, using internal port 27020 as well. Reserve that local IP in the
+   router so it does not change. Rust's port rule is a separate rule.
+6. Allow engine/Godot_v4.7.2-stable_win64.exe through Windows Firewall on the
+   network profile you actually use. If using an explicit inbound rule,
+   allow that program's UDP traffic on the game port.
+7. Give friends your router's PUBLIC IPv4 address, port, and optional password.
+   Friends enter those in ONLINE and click JOIN SERVER.
+
+There is no Wi-Fi password involved. Do not put http:// in the address field.
+If you choose another port, use that same UDP port in the game and router rule.
+Keep your host PC awake and the game running. Closing the host ends the session.
+
+WHICH ADDRESS?
+- Friends outside your home: your public IPv4, shown as the router's internet/WAN
+  address when your router has a public address, or a hostname pointing to it.
+- Another PC in your home: your host PC's local IPv4 (for example 192.168.1.50).
+- A game window on the same PC as a dedicated server: 127.0.0.1.
+- A public IP may not loop back from inside your own home. Test from a friend's
+  separate connection, or use the local IP when you are on the same router.
+You can find your PC's local IPv4 by opening Command Prompt and typing ipconfig.
+
+IF FRIENDS CANNOT JOIN
+- Confirm the server is actually running, and all players have version 0.7.1.
+- Check that the port rule is UDP and points at this PC's current local IPv4.
+- Check Windows Firewall and the exact password, if you set one.
+- Recheck your public IP; some home connections change it periodically.
+- If you have a modem/router plus another router, forwarding may be needed at
+  both devices. If your ISP uses carrier-grade NAT, ordinary router forwarding
+  will not expose your PC. Ask the ISP whether inbound connections/public IPv4
+  are available. A private VPN network is another route, but is not required
+  when ordinary public-IP hosting already works.
+- A TCP-only online port checker does not verify this UDP game service.
+
+OPTIONAL: DEDICATED SERVER ON YOUR PC
+Use this if you want the server in its own console instead of inside your game.
+1. Open server.cfg in Notepad and choose port, optional password and first map.
+2. Run START_DEDICATED_SERVER.bat; leave its window open.
+3. Run START_BRASSLINE.bat separately and JOIN 127.0.0.1 with the configured port.
+4. Friends still join your PUBLIC IP with that same port.
+Do not also click HOST & PLAY on the same port. Only one server can own a port.
+The dedicated console has no human player, so it starts with ten bots and can
+accept ten humans. Its server profile is separate from your player's save.
+Closing the console stops the server. Players retain their last confirmed XP.
+
+MATCH RULES
+5 blue slots and 5 red slots. Human counts differ by at most one when filling.
+Bots occupy all unused slots. Leaving players get bot replacements; if humans
+become uneven by more than one, a player moves teams with XP/K/D preserved.
+First team to 250 kills wins immediately. Otherwise the ten-minute timer ends
+play and higher team score wins; equal scores draw. No overtime.
+Each human gets one map vote during a 15-second intermission. Clicking another
+map changes your vote. Highest count wins. Ties prefer the next tied map in
+rotation after the current map; no votes means rotate to the next map.
+Round scores reset; levels and XP stay. Players remain connected across maps.
+
+TECHNICAL LIMITS OF THIS PROTOTYPE
+The host validates movement inputs, shooting, ammo, damage and respawns.
+Movement is predicted locally, with exact numbered-input replay at physics ticks.
+Remote actors use a smoothly advancing interpolation clock and brief extrapolation.
+Hitscan guns check recorded target hitboxes at the time displayed to the shooter.
+Rewind is limited by measured latency and capped at 500 ms; world walls still block
+shots. A player can be hit shortly after reaching cover if they were exposed on
+the shooter's delayed view. Old lives cannot be hit after a respawn.
+Actual network transmission still takes time: confirmed damage, hit sounds, kills,
+XP, and grenade boosts/explosions remain server-confirmed. Local visuals cannot
+predict another player's unknown input. Extreme latency or a saturated host can
+still produce corrections. Levels are local progress for private games, not a
+tamper-proof ranked account system.
+There is no public matchmaking, server browser or automatic router configuration.
+
+RESPONSIVENESS DIAGNOSTICS
+The joining player's upper-left HUD shows PING, FPS and SERVER Hz.
+- PING measures round-trip network time; higher numbers mean delayed confirmations.
+- FPS measures your game rendering speed; try LOW graphics if it is low.
+- SERVER Hz should stay near 60. If it drops substantially during hosting, lower
+  host graphics settings or try the optional dedicated server on a capable PC.
+- CONNECTION INTERRUPTED appears when no state update arrives for half a second.
+Include these readings and RUN_DIAGNOSTICS.bat's brassline.log when reporting lag.
+
+Tests include real separate processes and simulated delay/loss, including 300 ms
+round trip, 40 ms per-direction jitter, 10% random packet loss and a 30 FPS client.
+The actual performance on your friend's PC and your internet route need a retest.
+
+Official Godot networking reference:
+https://docs.godotengine.org/en/stable/tutorials/networking/high_level_multiplayer.html

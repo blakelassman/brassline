@@ -1,0 +1,77 @@
+BRASSLINE 0.7.1 - RESPONSIVENESS UPDATE
+
+EVERYONE MUST UPDATE: this build uses a new network protocol.
+Extract into a fresh folder; keep using UDP 27020 and your existing port rule.
+Your saved level and settings carry over automatically on the same Windows user.
+
+WHAT CHANGED
+- Fixed the server corrections that repeatedly pulled joining players backward.
+- Jump, crouch, movement, firing visuals, reload and grenade throws respond locally.
+- Moving-target hit detection compensates for the position shown on your screen.
+- Smoother remote movement and grenade visuals under jitter and packet loss.
+- Online HUD shows ping, your FPS, and the server's simulation rate.
+
+
+
+1. Extract the entire ZIP into a NEW folder.
+2. Open Brassline_Prototype_0_7_1.
+3. Double-click START_BRASSLINE.bat.
+
+The Windows 64-bit Godot engine is included. No installation or purchase needed.
+Your friends need this same 0.7.1 ZIP.
+
+PLAY
+- AIM TRAINING: the original passive targets and movement practice.
+- ENDLESS 5v5 BOTS: you + four allies against five bots. No match limit.
+- ONLINE TDM: host on your PC; friends connect using your public IP and UDP port.
+  First TEAM to 250 kills wins. At 10 minutes, the higher score wins; ties draw.
+  A 15-second map vote follows. The chosen arena starts the next round.
+
+HOSTING WITH FRIENDS OUTSIDE YOUR HOME
+Open HOSTING.txt. Default port: UDP 27020.
+Choose your initial map under PLAY, then ONLINE > HOST & PLAY.
+Forward UDP 27020 to your PC and allow the game through Windows Firewall.
+Friends enter your PUBLIC IP, the same port, and your optional server password.
+They connect to the game server, not to your Wi-Fi network.
+You can use another port if you forward that port instead.
+
+TEAMS
+Host alone: 1 human + 4 bots versus 5 bots.
+First friend: 1 human + 4 bots versus 1 human + 4 bots.
+New humans fill opposing teams evenly, up to 5 humans on each team.
+Departing humans get bot replacements. Teams rebalance humans if necessary.
+Rebalancing moves a player to a fresh spawn and keeps their XP and K/D.
+Respawns during play remain instant: no spawn shield and no countdown.
+
+SAVED PROGRESS AND SETTINGS
+Your level, XP, name, graphics, sound, sensitivity and controls save locally.
+Levels now survive closing and reopening the game. Maximum level: 1000.
+The profile belongs to this Windows user on this PC; there is no cloud account.
+The previous 0.6 build did not save XP, so closed 0.6 sessions cannot be recovered.
+
+DEFAULT CONTROLS - CHANGE ANY OF THESE IN CONTROLS
+WASD: move. Space or scroll down: jump. Ctrl or C: hold crouch.
+Mouse left: fire / slash / throw. Mouse right: aim / scope / short grenade toss.
+1 rifle. 2 heavy pistol. 3 sword. 4 sniper. R reload.
+G equip blast grenade. Q equip smoke. Grenades wait for your throw/toss click.
+Tab: hold scoreboard. H: tips. Esc: menu.
+F refill and T reset work only in aim training.
+Click a control binding, then press a key, mouse button or scroll wheel.
+Two bindings per action. A conflicting key moves to the new action.
+
+PERFORMANCE
+Start with BALANCED. Try LOW for fewer particles and no falling-body effects.
+HIGH adds shadows and anti-aliasing. Frame rate cap and fullscreen are adjustable.
+Static map geometry and bot parts now use fewer separate draw calls.
+Opening the menu pauses offline practice. Online matches keep running.
+
+OPTIONAL DEDICATED SERVER
+START_DEDICATED_SERVER.bat runs a server without a game window.
+Edit server.cfg for its port, password and first map. This is optional;
+HOST & PLAY is the easiest way to play and host together.
+
+TROUBLESHOOTING
+If Windows says the app cannot run, confirm you extracted the entire ZIP
+and are on 64-bit Windows. Do not launch the small console EXE by itself.
+If the game closes unexpectedly, run RUN_DIAGNOSTICS.bat and send brassline.log.
+For connection problems, see the short checklist in HOSTING.txt.
