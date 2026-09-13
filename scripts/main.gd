@@ -1,5 +1,7 @@
 extends Node3D
 
+var challenges = preload("res://scripts/challenges.gd").new()
+var cosmetics = preload("res://scripts/cosmetics.gd").new()
 var radar = preload("res://scripts/radar.gd").new()
 var applied_display = ""
 
@@ -75,6 +77,8 @@ func _ready() -> void:
 		if arg.begins_with("--profile="): prefs = Preferences.new(arg.trim_prefix("--profile="))
 	if "--server" in OS.get_cmdline_user_args(): prefs = Preferences.new("user://server_profile_v1.json")
 	prefs.load_profile()
+	challenges.load_data(prefs.data.challenges)
+	cosmetics.load_data(prefs.data.cosmetics)
 	progression.profiles["YOU"] = prefs.data.xp
 	_inputs()
 	prefs.apply_bindings()
@@ -89,6 +93,7 @@ func _ready() -> void:
 	add_child(effects)
 	player = Player.new()
 	player.game = self
+	player.cosmetics = cosmetics.equipped.duplicate()
 	add_child(player)
 	player.position = launch_pad
 	_training_targets()
@@ -123,6 +128,8 @@ func _ready() -> void:
 		call_deferred("_prediction_test")
 	elif "--network-test" in args:
 		call_deferred("_network_test")
+	elif "--collection-test" in args:
+		call_deferred("_collection_test")
 	elif "--display-test" in args:
 		call_deferred("_display_test")
 	elif "--polish-test" in args:
@@ -139,7 +146,7 @@ func _ready() -> void:
 		call_deferred("_self_test")
 	elif Array(args).any(func(arg): return arg.begins_with("--capture")):
 		call_deferred("_capture")
-	print("BRASSLINE ready | multiplayer prototype 0.8.0 | Godot ", Engine.get_version_info()["string"])
+	print("BRASSLINE ready | multiplayer prototype 0.9.0 | Godot ", Engine.get_version_info()["string"])
 
 func _training_targets() -> void:
 	var names = ["WALL PEEK","STRAFE","HIGH GROUND","CLOSE RANGE","TEAMMATE","COLLATERAL A","COLLATERAL B"]
@@ -188,6 +195,7 @@ func _target(pos: Vector3, title: String, moving: bool, team: int = 2) -> void:
 	targets.append(target)
 
 func _load_audio() -> void:
+	for cue in ["achievement","case_tick","case_reveal"]: audio[cue] = preload("res://scripts/reward_audio.gd").make(cue)
 	for key in ["rifle","pistol","blast","tick","jump","hit","head","equip","sword","parry","step","sniper","bolt_open","bolt_close","hurt","mag_out","mag_in","slide","empty","land","step_concrete","step_metal","step_tile","grenade_bounce","smoke_hiss","impact_concrete","impact_metal","ui","kill","ambient_foundry","ambient_dock","ambient_sunspire","ambient_relay"]:
 		audio[key] = AudioStreamWAV.load_from_file("res://assets/%s.wav" % key)
 	ambience = AudioStreamPlayer.new()
@@ -261,6 +269,7 @@ func start_mode(selected: String, map_index: int = -1) -> void:
 		await get_tree().physics_frame
 		changing_map = false
 	mode = selected
+	challenges.reset_match()
 	progression.reset_roster(mode=="combat")
 	kills = 0
 	air_heads = 0
@@ -399,6 +408,7 @@ func explode(origin: Vector3, owner_actor: Node = null, source_team: int = 1, ow
 			shooter.max_height = 0.0
 			if Rules.perfect_jump(age):
 				perfect_boosts += 1
+				challenge_event(shooter,"boosts")
 				if shooter==player: notify("PERFECT BOOST", "Draw the pistol. Find the head. Own the landing.")
 			else:
 				if shooter==player: notify("SMALL BOOST", "Jump just before the burst. F refills supplies.")
@@ -443,11 +453,15 @@ func make_smoke(origin: Vector3, remaining: float = 6.1) -> void:
 	cleanup.tween_callback(root.queue_free)
 	notify("SMOKE DEPLOYED", "Six seconds of visual cover. Bullets still pass through.")
 
-func record_kill(victim: String, weapon_name: String, head: bool, airborne: bool, group: int, killer: String = "YOU", killer_team: int = 1, one_shot: bool = false) -> void:
+func record_kill(victim: String, weapon_name: String, head: bool, airborne: bool, group: int, killer: String = "YOU", killer_team: int = 1, one_shot: bool = false, context: Dictionary = {}) -> void:
+	context = context.duplicate()
+	context.merge({"weapon":weapon_name,"head":head,"air":airborne,"group":group,"one_shot":one_shot,"time":clock,"victim":victim},true)
 	if net.running:
 		if net.server and not net.round_active: return
-		net.record_kill(victim,weapon_name,head,airborne,group,killer,killer_team,one_shot)
+		net.record_kill(victim,weapon_name,head,airborne,group,killer,killer_team,one_shot,context)
 		return
+	if victim=="YOU": accept_challenge("death",{"killer":killer})
+	if killer=="YOU" and victim!="YOU": accept_challenge("kill",context)
 	progression.record(killer,victim,killer_team,head,one_shot,clock,group,weapon_name=="LONGSHOT")
 	if killer=="YOU":
 		if not head: sound("kill",-19)
@@ -544,7 +558,7 @@ func shoot_ray(origin: Vector3, direction: Vector3, weapon_id: int, airborne: bo
 			any_head = any_head or head
 			if killed:
 				shot_kills += 1
-				record_kill(target.target_name,Rules.WEAPONS[weapon_id]["name"],head,airborne,action_serial,shooter.target_name,shooter.team,full_health and damage>=100)
+				record_kill(target.target_name,Rules.WEAPONS[weapon_id]["name"],head,airborne,action_serial,shooter.target_name,shooter.team,full_health and damage>=100,{"scope":shooter.scope_age,"distance":origin.distance_to(hit.position),"health":shooter.health,"boosted":clock-shooter.last_boost_time<5})
 				if head and airborne:
 					air_heads += 1
 			hit["headshot"] = head
@@ -587,6 +601,7 @@ func melee_attack(shooter: Node = null) -> void:
 	if closest != null:
 		if closest.get("parry_timer") != null and closest.parry_timer>0 and Rules.parry_blocks(-closest.global_basis.z,shooter.global_position-closest.global_position):
 			shooter.fire_cooldown = maxf(shooter.fire_cooldown,.85)
+			challenge_event(closest,"parries")
 			world_sound("parry",closest.global_position,-8)
 			return
 		var killed = damage_actor(closest,Rules.WEAPONS[2].body,shooter.team,shooter.target_name)
@@ -607,6 +622,7 @@ func _clear_effects() -> void:
 	smoke_nodes.clear()
 
 func reset_practice(reset_score: bool) -> void:
+	challenges.reset_life()
 	if mode=="combat":
 		if player.health<=0:
 			return
@@ -639,14 +655,37 @@ func _combat_test() -> void:
 	await suite.run(self)
 
 func _capture() -> void:
-	if not Array(OS.get_cmdline_user_args()).any(func(arg): return arg in ["--capture-menu","--capture-online","--capture-settings","--capture-controls"]):
+	if not Array(OS.get_cmdline_user_args()).any(func(arg): return arg in ["--capture-menu","--capture-online","--capture-settings","--capture-controls","--capture-locker","--capture-challenges","--capture-case","--capture-finish"]):
 		set_active(true)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	player.set_physics_process(false)
 	var modes = OS.get_cmdline_user_args()
-	for page in ["ONLINE","SETTINGS","CONTROLS"]:
+	for page in ["ONLINE","SETTINGS","CONTROLS","LOCKER","CHALLENGES"]:
 		if "--capture-"+page.to_lower() in modes: hud.menu.show_page(page)
+	if "--capture-locker" in modes:
+		for id in ["armor_royal","rifle_circuit","sniper_aurora","sword_gilded","pistol_orchid"]: cosmetics.owned[id] = 1
+		cosmetics.equip_item("rifle_circuit")
+		hud.menu.collection_menu.refresh_inventory()
+		hud.menu.collection_menu.select_item("armor_royal")
+	if "--capture-challenges" in modes:
+		for i in range(10): accept_challenge("kill",{"weapon":"RIFLE","time":float(i),"group":i,"head":true})
+		hud.menu.collection_menu.refresh_challenges()
+	if "--capture-medal" in modes:
+		challenges.current = {"title":"30 KILL STREAK","detail":"Still alive. Keep going.","milestone":false}
+		challenges.elapsed = .5
+	if "--capture-case" in modes or "--capture-finish" in modes:
+		hud.menu.show_page("LOCKER")
+		if "--capture-case" in modes:
+			hud.menu.collection_menu.open_case()
+			await get_tree().create_timer(3.5).timeout
+		else:
+			var preview_id = "sniper_aurora"
+			for arg in modes:
+				if arg.begins_with("--preview-item=") and cosmetics.catalog().has(arg.trim_prefix("--preview-item=")): preview_id = arg.trim_prefix("--preview-item=")
+			cosmetics.owned[preview_id] = 1
+			hud.menu.collection_menu.refresh_inventory()
+			hud.menu.collection_menu.select_item(preview_id)
 	if "--capture-client" in modes:
 		net.join("127.0.0.1",27020,"")
 		var deadline = Time.get_ticks_msec()+10000
@@ -816,9 +855,31 @@ func damage_actor(victim: Node, amount: int, source_team: int, attacker: String)
 	if net.running and not net.round_active: return false
 	if victim is Player: return victim.take_damage(amount,source_team,attacker)
 	return victim.take_damage(amount,source_team)
-func save_profile() -> void:
+func save_profile() -> bool:
 	prefs.data.xp = progression.xp_for("YOU")
-	if not prefs.save(): net.status = prefs.error
+	prefs.data.challenges = challenges.save_data()
+	prefs.data.cosmetics = cosmetics.save_data()
+	if not prefs.save():
+		net.status = prefs.error
+		return false
+	return true
+func accept_challenge(kind: String, data: Dictionary = {}) -> void:
+	challenges.event(kind,data)
+	prefs.dirty = true
+func challenge_event(actor: Node, kind: String, data: Dictionary = {}) -> void:
+	if net.running:
+		if net.server and actor.get("peer_id")!=null and actor.peer_id>0:
+			if actor.peer_id==1: accept_challenge(kind,data)
+			elif net.can_send(actor.peer_id): net._challenge.rpc_id(actor.peer_id,kind,data)
+	elif actor==player: accept_challenge(kind,data)
+func apply_cosmetics() -> void:
+	player.cosmetics = cosmetics.equipped.duplicate()
+	player.viewmodel.apply_cosmetics()
+	if net.is_client_ready(): net._cosmetic_request.rpc_id(1,cosmetics.equipped)
+func _collection_test() -> void:
+	var suite = load("res://tests/test_collection.gd").new()
+	add_child(suite)
+	await suite.run(self)
 func apply_settings() -> void:
 	player.sensitivity = prefs.data.sensitivity
 	AudioServer.set_bus_volume_db(0,linear_to_db(maxf(.0001,prefs.data.volume)))

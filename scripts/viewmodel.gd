@@ -111,7 +111,7 @@ func _ready() -> void:
 			Geo.sphere(bolt,Vector3(.19,.015,.08),.034,dark)
 		preload("res://scripts/weapon_art.gd").detail(model,index)
 		mag_origins.append(mag.position)
-		make_hand(model,Vector3(.025,-.18,.28))
+		var main_hand = make_hand(model,Vector3(.025,-.18,.28))
 		var hand = make_hand(model,Vector3(-.035,-.13,-.22))
 		support_hands.append(hand)
 		if index!=2:
@@ -128,6 +128,7 @@ func _ready() -> void:
 			Geo.box(model,Vector3(0,.105,barrel_z+.08),Vector3(.016,.07,.025),dark)
 		var flash = Node3D.new()
 		model.add_child(flash)
+		flash.set_meta("no_finish",true)
 		flash.position = Vector3(0,.025,[-.82,-.26,0,-1.07][index])
 		for turn in range(3):
 			var flame = Geo.box(flash,Vector3(0,0,-.055),Vector3(.018,.075,.14),Color("ffdf9a"))
@@ -139,7 +140,7 @@ func _ready() -> void:
 		flashes.append(flash)
 		for part in model.get_children():
 			if part!=flash: Geo.finish_weapon(part)
-		preload("res://scripts/optimizer.gd").batch(model,[mag,bolt,hand,flash])
+		preload("res://scripts/optimizer.gd").batch(model,[mag,bolt,hand,main_hand,flash])
 	grenade_model = Node3D.new()
 	root.add_child(grenade_model)
 	grenade_shell = Geo.sphere(grenade_model,Vector3(0,0,.02),.12,gold)
@@ -149,6 +150,7 @@ func _ready() -> void:
 	Geo.box(grenade_model,Vector3(.075,.075,.02),Vector3(.03,.16,.04),cream)
 	Geo.box(grenade_model,Vector3(0,-.13,.17),Vector3(.16,.14,.29),Color("315e69"))
 	Geo.finish_weapon(grenade_model)
+	apply_cosmetics()
 	update_pose(0.0)
 
 func update_pose(delta: float) -> void:
@@ -219,6 +221,7 @@ func update_pose(delta: float) -> void:
 
 func make_hand(parent: Node3D, at: Vector3) -> Node3D:
 	var hand = Node3D.new()
+	hand.set_meta("no_finish",true)
 	parent.add_child(hand)
 	hand.position = at
 	Geo.box(hand,Vector3.ZERO,Vector3(.13,.10,.16),Color("536f74"),false,"rubber")
@@ -240,3 +243,8 @@ func on_shot() -> void:
 	shell.position = root.global_transform*Vector3(.14,.025,.04)
 	shell.rotation.z = PI/2
 	casings.append({"node":shell,"velocity":Vector3(1.5,1.0,.25),"life":.65})
+
+func apply_cosmetics() -> void:
+	var collection = preload("res://scripts/cosmetics.gd")
+	var loadout = collection.clean_loadout(player.cosmetics)
+	for index in range(models.size()): collection.paint(models[index],loadout[["rifle","pistol","sword","sniper"][index]])

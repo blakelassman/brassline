@@ -3,7 +3,7 @@ extends RefCounted
 const PATH = "user://profile_v1.json"
 const DEFAULT_KEYS = {"forward":[KEY_W],"back":[KEY_S],"left":[KEY_A],"right":[KEY_D],"jump":[KEY_SPACE,-MOUSE_BUTTON_WHEEL_DOWN],"crouch":[KEY_CTRL,KEY_C],"fire":[-MOUSE_BUTTON_LEFT],"aim":[-MOUSE_BUTTON_RIGHT],"weapon_0":[KEY_1],"weapon_1":[KEY_2],"weapon_2":[KEY_3],"weapon_3":[KEY_4],"reload":[KEY_R],"blast":[KEY_G],"smoke":[KEY_Q],"refill":[KEY_F],"reset":[KEY_T],"scoreboard":[KEY_TAB],"help":[KEY_H],"pause":[KEY_ESCAPE]}
 const LABELS = {"forward":"Move forward","back":"Move backward","left":"Strafe left","right":"Strafe right","jump":"Jump","crouch":"Crouch (hold)","fire":"Fire / slash / throw","aim":"Aim / scope / parry / short toss","weapon_0":"Rifle","weapon_1":"Heavy pistol","weapon_2":"Sword","weapon_3":"Sniper","reload":"Reload","blast":"Equip blast grenade","smoke":"Equip smoke grenade","refill":"Refill training supplies","reset":"Reset training drill","scoreboard":"Scoreboard (hold)","help":"Toggle tips","pause":"Open / close menu"}
-var data: Dictionary = {"version":1,"name":"Player","id":"","xp":0,"sensitivity":.0023,"volume":.65,"quality":1,"fps_limit":120,"fullscreen":false,"resolution_width":1920,"resolution_height":1080,"bindings":{},"last_address":"","port":27020}
+var data: Dictionary = {"version":1,"name":"Player","id":"","xp":0,"sensitivity":.0023,"volume":.65,"quality":1,"fps_limit":120,"fullscreen":false,"resolution_width":1920,"resolution_height":1080,"challenges":{},"cosmetics":{},"bindings":{},"last_address":"","port":27020}
 var path = PATH
 var error = ""
 var dirty = false

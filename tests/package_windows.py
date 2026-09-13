@@ -38,11 +38,11 @@ def main():
                     or "__pycache__" in relative.parts
                     or source.suffix in {".import", ".log", ".pyc", ".zip"}):
                 continue
-            archive.write(source, Path("Brassline_Prototype_0_8_0") / relative)
+            archive.write(source, Path("Brassline_Prototype_0_9_0") / relative)
     with ZipFile(destination) as archive:
         assert archive.testzip() is None
         for name in ENGINE_HASHES:
-            data = archive.read(f"Brassline_Prototype_0_8_0/engine/{name}")
+            data = archive.read(f"Brassline_Prototype_0_9_0/engine/{name}")
             validate_engine(name, data)
             assert data == (ROOT / "engine" / name).read_bytes()
             print(f"PASS Packaged {name}: {len(data)} bytes, pinned SHA-256 verified")

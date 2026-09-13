@@ -12,7 +12,10 @@ var flash: MeshInstance3D
 var flash_time = 0.0
 func _ready() -> void:
 	var color = Color("30bac6") if player.team==1 else Color("ed6c46")
-	rig = Rig.build(player,color,0)
+	var collection = preload("res://scripts/cosmetics.gd")
+	var loadout = collection.clean_loadout(player.cosmetics)
+	rig = Rig.build(player,color,collection.catalog()[loadout.armor].variant)
+	collection.paint(rig.root,loadout.armor,true)
 	root = rig.root
 	root.rotation.y = PI
 	Optimizer.rig(rig)
@@ -49,5 +52,15 @@ func weapon_model(index: int) -> Node3D:
 		var model = preload("res://scripts/weapon_art.gd").world(root,index)
 		model.position = Vector3(.26,1.13,.3)
 		model.rotation.y = PI
+		var collection = preload("res://scripts/cosmetics.gd")
+		collection.paint(model,collection.clean_loadout(player.cosmetics)[["rifle","pistol","sword","sniper"][index]])
 		guns[index] = model
 	return guns[index]
+
+func apply_cosmetics() -> void:
+	var orientation = root.rotation.y
+	root.free()
+	title.free()
+	guns.clear()
+	_ready()
+	root.rotation.y = orientation

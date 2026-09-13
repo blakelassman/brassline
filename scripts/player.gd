@@ -2,6 +2,9 @@ extends CharacterBody3D
 
 const Rules = preload("res://scripts/rules.gd")
 const Viewmodel = preload("res://scripts/viewmodel.gd")
+var cosmetics: Dictionary = {}
+var rifle_shots = 0
+var rifle_idle = 99.0
 var look_sway = Vector2.ZERO
 var landing_pose = 0.0
 var movement_phase = 0.0
@@ -187,6 +190,8 @@ func _physics_process(delta: float) -> void:
 	viewmodel.update_pose(delta)
 
 func advance_weapon_state(delta: float) -> void:
+	rifle_idle += delta
+	if rifle_idle>=Rules.RIFLE_RESET: rifle_shots = 0
 	parry_timer = maxf(0,parry_timer-delta)
 	parry_cooldown = maxf(0,parry_cooldown-delta)
 	var old_cycle = sniper_cycle
@@ -228,6 +233,8 @@ func equip(index: int) -> void:
 	held_grenade = ""
 	parry_timer = 0.0
 	weapon = index
+	rifle_shots = 0
+	rifle_idle = 99.0
 	equip_cooldown = 0.22
 	reload_timer = 0.0
 	scope_age = 0.0
@@ -245,6 +252,8 @@ func equip_grenade(kind: String) -> void:
 	network_action("grenade",1 if kind=="smoke" else 0)
 	parry_timer = 0.0
 	held_grenade = kind
+	rifle_shots = 0
+	rifle_idle = 99.0
 	reload_timer = 0.0
 	scope_age = 0.0
 	swing_pending = false
@@ -283,7 +292,12 @@ func shoot() -> void:
 	play_sound("sniper" if weapon == 3 else ("rifle" if weapon == 0 else "pistol"), -9.0 if weapon == 3 else -11.0)
 	visual_kick = .5 if weapon == 0 else 1.0
 	viewmodel.on_shot()
-	pitch = clampf(pitch + deg_to_rad(Rules.WEAPONS[weapon]["kick"]), -1.50, 1.50)
+	var recoil = Rules.rifle_recoil(rifle_shots) if weapon==0 else Vector2(0,Rules.WEAPONS[weapon]["kick"])
+	if weapon==0:
+		rifle_shots = mini(23,rifle_shots+1)
+		rifle_idle = 0
+	rotate_y(-deg_to_rad(recoil.x))
+	pitch = clampf(pitch + deg_to_rad(recoil.y), -1.50, 1.50)
 	camera.rotation.x = pitch
 
 func start_reload() -> void:
@@ -293,6 +307,8 @@ func start_reload() -> void:
 	if weapon==3:
 		sniper_cycle = 0
 	reload_timer = Rules.WEAPONS[weapon]["reload"]
+	rifle_shots = 0
+	rifle_idle = 99.0
 	scope_age = 0.0
 	play_sound("equip", -12.0)
 
@@ -349,6 +365,8 @@ func take_damage(amount: int, source_team: int, attacker: String = "ENEMY") -> b
 	return false
 
 func refill() -> void:
+	rifle_shots = 0
+	rifle_idle = 99.0
 	max_height = 0.0
 	blast_count = 1
 	smoke_count = 1
@@ -357,6 +375,8 @@ func refill() -> void:
 	health = 100
 
 func reset_at(pos: Vector3) -> void:
+	rifle_shots = 0
+	rifle_idle = 99.0
 	parry_timer = 0.0
 	parry_cooldown = 0.0
 	correction_offset = Vector3.ZERO

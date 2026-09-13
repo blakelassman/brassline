@@ -74,6 +74,7 @@ func _label(parent: Node, text: String, size: int, color: Color) -> void:
 	parent.add_child(label)
 
 func _process(_delta: float) -> void:
+	if game.challenges.update(_delta,game.active and not game.menu_open): game.sound("achievement",-15)
 	queue_redraw()
 	vote_panel.visible = game.net.running and not game.net.round_active and not game.menu_open
 	if vote_panel.visible:
@@ -103,6 +104,7 @@ func _draw() -> void:
 	if scoped:
 		_draw_scope()
 	_draw_minimap()
+	_draw_medal()
 	if game.mode in ["combat","online"]:
 		centered("%d   :   %d" % [game.combat.scores[1],game.combat.scores[2]],42,26,ink)
 	if game.net.running:
@@ -270,3 +272,25 @@ func _draw_minimap() -> void:
 	var arrow = PackedVector2Array()
 	for point in [Vector2(0,-7),Vector2(-5,5),Vector2(0,2),Vector2(5,5)]: arrow.append(at+point.rotated(-game.player.rotation.y))
 	draw_colored_polygon(arrow,gold)
+
+func _draw_medal() -> void:
+	var award = game.challenges.current
+	if award.is_empty(): return
+	var age = game.challenges.elapsed
+	var alpha = minf(clampf(age/.16,0,1),clampf((2.6-age)/.4,0,1))
+	var color = Color(gold,alpha)
+	var x = size.x*.5
+	var y = 128.0-8.0*(1-clampf(age/.2,0,1))
+	var points = PackedVector2Array([Vector2(x,y-21),Vector2(x+15,y),Vector2(x,y+21),Vector2(x-15,y),Vector2(x,y-21)])
+	draw_polyline(points,color,2,true)
+	draw_line(Vector2(x-180,y),Vector2(x-35,y),Color(gold,alpha*.5),1)
+	draw_line(Vector2(x+35,y),Vector2(x+180,y),Color(gold,alpha*.5),1)
+	medal_text("CHALLENGE COMPLETE" if award.milestone else "MEDAL EARNED",y-32,12,Color(ink,alpha))
+	medal_text(award.title,y+51,25,color)
+	medal_text(award.detail,y+73,14,Color(ink,alpha))
+
+func medal_text(value: String, y: float, font_size: int, color: Color) -> void:
+	var width = font.get_string_size(value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+	var at = Vector2((size.x-width)*.5,y)
+	draw_string_outline(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,4,Color(.03,.07,.09,color.a*.85))
+	draw_string(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,color)

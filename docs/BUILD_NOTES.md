@@ -1,3 +1,5 @@
+Current update: [0.9 challenges, recoil and Locker](UPDATE_0_9.md).
+
 # Current build: 0.8.0
 
 Read [UPDATE_0_8.md](UPDATE_0_8.md) for current behavior and verification.

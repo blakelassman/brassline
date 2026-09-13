@@ -18,6 +18,17 @@ const WEAPONS = [
 	{"name": "LONGSHOT", "body": 100, "head": 100, "mag": 6, "cooldown": 1.1, "reload": 2.1, "kick": 4.5},
 ]
 
+# Per-shot camera increments in degrees. Fixed 24-round S curve, no random recoil.
+# A 0.65 s pause resets the sequence; ADS uses the same pattern.
+const RIFLE_RESET = .65
+const RIFLE_SPRAY = [Vector2(.10,1.25),Vector2(.22,1.40),Vector2(.42,1.55),Vector2(.72,1.65),
+	Vector2(1.05,1.75),Vector2(1.32,1.80),Vector2(1.48,1.75),Vector2(1.16,1.70),
+	Vector2(.65,1.60),Vector2(.08,1.55),Vector2(-.55,1.50),Vector2(-1.10,1.55),
+	Vector2(-1.48,1.60),Vector2(-1.72,1.65),Vector2(-1.62,1.65),Vector2(-1.32,1.60),
+	Vector2(-.82,1.55),Vector2(-.20,1.50),Vector2(.48,1.45),Vector2(1.10,1.50),
+	Vector2(1.55,1.55),Vector2(1.75,1.60),Vector2(1.48,1.65),Vector2(.95,1.70)]
+static func rifle_recoil(index: int) -> Vector2: return RIFLE_SPRAY[clampi(index,0,23)]
+
 static func perfect_jump(jump_age: float) -> bool:
 	return jump_age >= 0.0 and jump_age <= PERFECT_WINDOW
 
