@@ -34,15 +34,15 @@ def main():
     with ZipFile(destination, "w", ZIP_DEFLATED, compresslevel=6) as archive:
         for source in sorted(ROOT.rglob("*")):
             relative = source.relative_to(ROOT)
-            if (not source.is_file() or ".godot" in relative.parts
+            if (not source.is_file() or any(part in {".git", ".godot"} for part in relative.parts)
                     or "__pycache__" in relative.parts
-                    or source.suffix in {".import", ".log", ".pyc"}):
+                    or source.suffix in {".import", ".log", ".pyc", ".zip"}):
                 continue
-            archive.write(source, Path("Brassline_Prototype_0_7_1") / relative)
+            archive.write(source, Path("Brassline_Prototype_0_8_0") / relative)
     with ZipFile(destination) as archive:
         assert archive.testzip() is None
         for name in ENGINE_HASHES:
-            data = archive.read(f"Brassline_Prototype_0_7_1/engine/{name}")
+            data = archive.read(f"Brassline_Prototype_0_8_0/engine/{name}")
             validate_engine(name, data)
             assert data == (ROOT / "engine" / name).read_bytes()
             print(f"PASS Packaged {name}: {len(data)} bytes, pinned SHA-256 verified")

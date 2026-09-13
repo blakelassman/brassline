@@ -14,7 +14,7 @@ const SCOPE_READY = 0.12
 const WEAPONS = [
 	{"name": "RIFLE", "body": 25, "head": 100, "mag": 24, "cooldown": 0.16, "reload": 1.45, "kick": 0.75},
 	{"name": "HEAVY PISTOL", "body": 40, "head": 100, "mag": 7, "cooldown": 0.65, "reload": 1.65, "kick": 3.2},
-	{"name": "SWORD", "body": 50, "head": 50, "mag": 0, "cooldown": 0.65, "reload": 0.0, "kick": 0.0},
+	{"name": "SWORD", "body": 100, "head": 100, "mag": 0, "cooldown": 0.65, "reload": 0.0, "kick": 0.0},
 	{"name": "LONGSHOT", "body": 100, "head": 100, "mag": 6, "cooldown": 1.1, "reload": 2.1, "kick": 4.5},
 ]
 
@@ -31,9 +31,9 @@ static func ground_move(flat: Vector2, wish: Vector2, speed: float, delta: float
 		return flat.move_toward(Vector2.ZERO, 120.0 * delta)
 	# An opposite direction brakes faster than releasing movement, then accelerates.
 	if flat.dot(wish) < 0.0:
-		var stop_time = flat.length() / 220.0
+		var stop_time = flat.length() / 145.0
 		if delta <= stop_time:
-			return flat.move_toward(Vector2.ZERO, 220.0 * delta)
+			return flat.move_toward(Vector2.ZERO, 145.0 * delta)
 		return Vector2.ZERO.move_toward(wish * speed, 90.0 * (delta - stop_time))
 	return flat.move_toward(wish * speed, 90.0 * delta)
 
@@ -76,3 +76,10 @@ static func launch_velocity(old_velocity: Vector3, feet: Vector3, origin: Vector
 	var result = old_velocity + impulse
 	var flat = Vector2(result.x, result.z).limit_length(HORIZONTAL_CAP)
 	return Vector3(flat.x, minf(result.y, VERTICAL_CAP), flat.y)
+
+# Match angular movement to projected image size, including the zoom transition.
+static func fov_sensitivity(fov: float, base_fov: float = 86.0) -> float:
+	return tan(deg_to_rad(clampf(fov,1,179)*.5))/tan(deg_to_rad(base_fov*.5))
+
+static func parry_blocks(facing: Vector3, toward_attacker: Vector3) -> bool:
+	return facing.normalized().dot(toward_attacker.normalized()) >= .5

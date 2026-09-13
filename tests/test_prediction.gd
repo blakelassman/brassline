@@ -36,6 +36,7 @@ func host_prediction() -> void:
 	await wait_for(func(): return marked("stopped"),20)
 	await get_tree().create_timer(1).timeout
 	mark("server_position",var_to_str(actor.position))
+	print("SERVER_MOVE_METRICS pos=",actor.position," ack=",actor.last_input_sequence," received=",game.net.peers[remote_id].last_sequence," gaps=",game.net.peers[remote_id].frame_gap," Hz=",game.net.server_tick_rate)
 	check(actor.position.x>10 and actor.position.x<16,"Server movement stays within expected two-second run distance")
 	await wait_for(func(): return marked("jump"))
 	var apex = actor.position.y
@@ -76,6 +77,7 @@ func client_prediction() -> void:
 	platform()
 	await wait_for(func(): return marked("ready"))
 	await get_tree().create_timer(1).timeout
+	var start_time = Time.get_ticks_msec()
 	var start = game.player.position
 	var last = start
 	var rollback = 0.0
@@ -87,6 +89,7 @@ func client_prediction() -> void:
 		rollback = maxf(rollback,last.x-game.player.position.x)
 		last = game.player.position
 	Input.action_release("right")
+	print("CLIENT_TIMING ms=",Time.get_ticks_msec()-start_time," fps=",Engine.get_frames_per_second()," throttle=",game.multiplayer.multiplayer_peer.get_peer(1).get_statistic(ENetPacketPeer.PEER_PACKET_THROTTLE))
 	print("PREDICTION_METRICS distance=",last.x-start.x," max_rollback=",rollback," corrections=",game.net.corrections-old_corrections)
 	check(rollback<.05,"Straight movement has no visible backward corrections")
 	mark("stopped")

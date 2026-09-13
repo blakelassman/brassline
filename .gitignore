@@ -3,3 +3,7 @@
 export_presets.cfg
 *.log
 engine/
+
+*.wav.import
+__pycache__/
+*.pyc

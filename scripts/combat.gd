@@ -2,7 +2,7 @@ extends Node
 ## Offline team skirmish coordination, ground routing and four spawn zones.
 const Bot = preload("res://scripts/bot.gd")
 const Geo = preload("res://scripts/geo.gd")
-const SPAWNS = [Vector3(-17,.05,16),Vector3(17,.05,16),Vector3(-17,.05,-16),Vector3(17,.05,-16)]
+const SPAWNS = [Vector3(-27,.05,25),Vector3(27,.05,25),Vector3(-27,.05,-25),Vector3(27,.05,-25)]
 var game: Node3D
 var bots: Array[CharacterBody3D] = []
 var spawn_candidates: Array = []
@@ -29,9 +29,9 @@ func actors() -> Array:
 func build_navigation() -> void:
 	if navigation.get_point_count()>0:
 		return
-	for x in range(25):
-		for z in range(23):
-			var pos = Vector3(-18+x*1.5,.05,-16.5+z*1.5)
+	for x in range(39):
+		for z in range(37):
+			var pos = Vector3(-28.5+x*1.5,.05,-27+z*1.5)
 			if not free_space(pos):
 				continue
 			var id = x*100+z
@@ -46,6 +46,15 @@ func build_navigation() -> void:
 				# Midpoint clearance catches thin walls between grid cells.
 				if free_space((a+b)*.5):
 					navigation.connect_points(node_ids[cell],node_ids[other])
+
+	# Explicit elevation routes follow the same ramp surfaces used by player collision.
+	for route in game.world_root.get_meta("upper_routes",[]):
+		var previous = navigation.get_closest_point(route[0])
+		for point in route:
+			var id = navigation.get_available_point_id()
+			navigation.add_point(id,point)
+			navigation.connect_points(previous,id)
+			previous = id
 
 func free_space(pos: Vector3) -> bool:
 	var query = PhysicsShapeQueryParameters3D.new()
@@ -84,9 +93,6 @@ func start() -> void:
 	game.add_child(markers)
 	for i in range(SPAWNS.size()):
 		Geo.box(markers,SPAWNS[i],Vector3(3,.03,3),Color("5f8990"))
-		var sign = Geo.sign_text(markers,SPAWNS[i]+Vector3.UP*2.4,"SPAWN %d" % (i+1),20,Color("bed7d6"))
-		sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		sign.visibility_range_begin = 4.0
 	game.player.health = 0
 	game.player.reset_at(choose_spawn(1,game.player))
 	game.player.rotation.y = atan2(game.player.position.x,game.player.position.z)
@@ -185,6 +191,7 @@ func sight_clear(origin: Vector3, destination: Vector3) -> bool:
 func shoot_bot(bot: CharacterBody3D, aim_point: Vector3) -> void:
 	if bot.health<=0 or game.mode not in ["combat","online"]:
 		return
+	game.radar.mark(bot,game.clock)
 	bot_shots += 1
 	var origin = bot.global_position+Vector3.UP*1.38
 	var direction = (aim_point-origin).normalized()

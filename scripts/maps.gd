@@ -1,13 +1,27 @@
 extends RefCounted
-## Four fixed arenas with original architecture. Decorative meshes never block shots.
+## Original compact districts. Walkable interiors, upper galleries and boost-access roofs.
 const Geo = preload("res://scripts/geo.gd")
 const NAMES = ["FOUNDRY YARD","DRY DOCK","SUNSPIRE","RELAY"]
-const DESCRIPTIONS = ["The original movement lab. Open sightlines and boost drills.","Container alleys, loading platforms and long dockside angles.","Warm courtyards, split lanes and a raised central terrace.","A cool industrial station with machinery and overhead routes."]
+const DESCRIPTIONS = ["Brick workshops, furnace court and elevated service galleries.","Harbor offices, gantry cranes and a dockside warehouse route.","Terracotta rooftops, market arcades and a sunlit fountain square.","Mountain communications campus, skybridge and antenna decks."]
 const FLOORS = ["concrete","metal","tile","metal"]
-const PADS = [Vector3(-6,.06,6),Vector3(-10,.06,13),Vector3(-11,.06,13),Vector3(-11,.06,13)]
-const PRACTICE = [[],[Vector3(-10,.05,-7),Vector3(1,.05,-12),Vector3(12,2.45,-5),Vector3(-14,.05,4),Vector3(10,.05,13),Vector3(0,.05,1),Vector3(0,.05,-3)],
-	[Vector3(-11,.05,-8),Vector3(11,.05,-8),Vector3(0,2.05,-1),Vector3(-12,.05,4),Vector3(12,.05,12),Vector3(8,.05,0),Vector3(8,.05,-4)],
-	[Vector3(-12,.05,-10),Vector3(1,.05,-13),Vector3(0,3.05,-8),Vector3(-12,.05,4),Vector3(12,.05,13),Vector3(11,.05,1),Vector3(11,.05,-3)]]
+const PADS = [Vector3(-5,.06,20),Vector3(-5,.06,20),Vector3(-5,.06,20),Vector3(-5,.06,20)]
+# [center X, center Z, yaw]. Every building has two usable floors and an open roof.
+const BLOCKS = [
+	[Vector3(-14,-7,0),Vector3(13,7,PI)],
+	[Vector3(-13,7,0),Vector3(13,-8,PI/2)],
+	[Vector3(-14,-5,0),Vector3(12,8,PI)],
+	[Vector3(-13,6,0),Vector3(13,-7,PI)]]
+const PRACTICE = [
+	[Vector3(-5,.05,-12),Vector3(4,.05,-17),Vector3(-14,3.25,-5),Vector3(-12,.05,17),Vector3(8,.05,20),Vector3(-2,.05,3),Vector3(-2,.05,-2)],
+	[Vector3(-4,.05,-12),Vector3(4,.05,-17),Vector3(-13,3.25,9),Vector3(-12,.05,19),Vector3(8,.05,20),Vector3(-2,.05,3),Vector3(-2,.05,-2)],
+	[Vector3(-5,.05,-13),Vector3(5,.05,-17),Vector3(-14,3.25,-3),Vector3(-12,.05,17),Vector3(8,.05,20),Vector3(-4,.05,4),Vector3(-4,.05,0)],
+	[Vector3(-4,.05,-12),Vector3(4,.05,-17),Vector3(-13,3.25,8),Vector3(-12,.05,19),Vector3(8,.05,20),Vector3(-2,.05,3),Vector3(-2,.05,-2)]]
+static func footprints(index: int) -> Array:
+	var result: Array = []
+	for block in BLOCKS[index]:
+		var size = Vector2(10,12) if absf(sin(block.z))>.5 else Vector2(12,10)
+		result.append(Rect2(Vector2(block.x,block.y)-size*.5,size))
+	return result
 
 static func environment(parent: Node3D, index: int) -> void:
 	var env_node = WorldEnvironment.new()
@@ -35,51 +49,6 @@ static func environment(parent: Node3D, index: int) -> void:
 	sun.directional_shadow_max_distance = 65
 	parent.add_child(sun)
 
-static func shell(parent: Node3D, index: int) -> void:
-	var floor_color = [Color("b1b7ac"),Color("b1b7ac"),Color("e6d4ad"),Color("657d89")][index]
-	var wall_color = [Color("719098"),Color("78949b"),Color("e3bb85"),Color("526b7c")][index]
-	Geo.box(parent,Vector3(0,-.3,0),Vector3(42,.6,40),floor_color,true,FLOORS[index])
-	for side in [-1,1]:
-		Geo.box(parent,Vector3(side*20,3.5,0),Vector3(.8,7,40),wall_color,true,"brick" if index==2 else "panel")
-		Geo.box(parent,Vector3(0,3.5,side*19),Vector3(40,7,.8),wall_color,true,"brick" if index==2 else "panel")
-		Geo.box(parent,Vector3(side*19.55,.18,0),Vector3(.15,.36,38),Color("354c58"))
-		Geo.box(parent,Vector3(0,.18,side*18.55),Vector3(40,.36,.15),Color("354c58"))
-		for z in range(-16,19,4):
-			Geo.box(parent,Vector3(side*19.5,3.4,z),Vector3(.35,6.8,.35),wall_color.darkened(.23))
-	# Invisible high perimeter catches boosted players while leaving sky visible.
-	for edge in [Vector3(-21,18,0),Vector3(21,18,0),Vector3(0,18,-20),Vector3(0,18,20)]:
-		var barrier = StaticBody3D.new()
-		parent.add_child(barrier)
-		barrier.position = edge
-		var collision = CollisionShape3D.new()
-		var shape = BoxShape3D.new()
-		shape.size = Vector3(1,36,44) if edge.x!=0 else Vector3(44,36,1)
-		collision.shape = shape
-		barrier.add_child(collision)
-	Geo.sign_text(parent,Vector3(0,5.5,-18.5),NAMES[index],100,Color("f8e5bb"))
-	Geo.sign_text(parent,Vector3(0,4.55,-18.48),"BRASSLINE / SECTOR 0%d" % index,25,Color("ddba74"))
-
-static func lamp(parent: Node3D, pos: Vector3, color: Color, length: float = 2.0) -> void:
-	var bar = Geo.box(parent,pos,Vector3(length,.1,.15),color)
-	bar.get_child(0).material_override = Geo.material(color,1.8)
-	var light = OmniLight3D.new()
-	parent.add_child(light)
-	light.position = pos+Vector3(0,-.2,.3)
-	light.light_color = color
-	light.light_energy = .65
-	light.omni_range = 7
-	light.shadow_enabled = false
-
-static func container(parent: Node3D, pos: Vector3, size: Vector3, color: Color, id: String) -> void:
-	var root = Geo.box(parent,pos,size,color,true,"panel")
-	for x in [-1,1]:
-		for z in [-1,1]:
-			Geo.box(root,Vector3(x*(size.x*.5-.08),0,z*(size.z*.5+.01)),Vector3(.16,size.y,.10),color.darkened(.3))
-	for x in [-.35,.35]:
-		Geo.box(root,Vector3(x,size.y*.04,size.z*.5+.05),Vector3(.05,size.y*.85,.07),Color("c5c6b5"))
-	Geo.sign_text(root,Vector3(0,size.y*.25,size.z*.5+.06),id,22,Color("f2e6cd"))
-	Geo.box(root,Vector3(0,-size.y*.42,size.z*.5+.04),Vector3(size.x*.8,.13,.04),Color("dab768"))
-
 static func ramp(parent: Node3D, center: Vector3, width: float, run: float, rise: float, color: Color) -> Node3D:
 	# Wedge geometry keeps bot routes at ground level; human movement can walk up.
 	var mesh = ArrayMesh.new()
@@ -94,6 +63,7 @@ static func ramp(parent: Node3D, center: Vector3, width: float, run: float, rise
 	for v in [a,c,b,a,d,c,a,e,d,b,c,f,e,f,c,e,c,d,a,b,f,a,f,e]:
 		st.add_vertex(v)
 	st.generate_normals()
+	st.index()
 	mesh = st.commit()
 	var body = StaticBody3D.new()
 	parent.add_child(body)
@@ -110,123 +80,168 @@ static func ramp(parent: Node3D, center: Vector3, width: float, run: float, rise
 	body.add_child(collision)
 	return body
 
-static func build(parent: Node3D, index: int) -> void:
-	shell(parent,index)
-	match index:
-		1: dock(parent)
-		2: sunspire(parent)
-		3: relay(parent)
-	# Mark the starting practice spot on every new map.
-	Geo.box(parent,PADS[index]-Vector3.UP*.035,Vector3(2.6,.025,2.6),Color("d9b15b"))
 
-static func dock(parent: Node3D) -> void:
-	var navy = Color("3b7187")
-	var orange = Color("d97b48")
-	container(parent,Vector3(-7,1.4,-3),Vector3(4,2.8,8),navy,"BL / 071")
-	container(parent,Vector3(7,1.4,6),Vector3(4,2.8,8),orange,"BL / 043")
-	container(parent,Vector3(7,1.4,-10),Vector3(4,2.8,5),Color("93a780"),"BL / 019")
-	container(parent,Vector3(-13,1.4,-12),Vector3(3,2.8,5),orange,"BL / 026")
-	# Upper loading deck and a walkable ramp; the left and center lanes remain open.
-	Geo.box(parent,Vector3(13,1.2,-5),Vector3(5,2.4,5),Color("718995"),true,"panel")
-	ramp(parent,Vector3(13,0,1),3,7,2.4,Color("929f9f"))
-	for z in [-7,-3]:
-		Geo.box(parent,Vector3(15.55,2.9,z),Vector3(.1,1,.1),Color("e0bd6d"))
-	Geo.beam(parent,Vector3(15.55,3.4,-7),Vector3(15.55,3.4,-3),.1,Color("e0bd6d"))
-	Geo.crate(parent,Vector3(-12,.8,7),Vector3(2.5,1.6,2.5),Color("b9a37b"))
-	Geo.crate(parent,Vector3(1,.55,7),Vector3(2,1.1,2),Color("b4a078"))
-	for z in range(-16,18,3):
-		Geo.box(parent,Vector3(2,.02,z),Vector3(.12,.025,1.4),Color("ead191"))
-	for x in [-17,17]:
-		Geo.box(parent,Vector3(x,5,-13),Vector3(.55,10,.55),Color("d0a150"))
-	Geo.box(parent,Vector3(0,9.6,-13),Vector3(34,1,.8),Color("d0a150"))
-	for x in range(-15,16,3):
-		Geo.beam(parent,Vector3(x,9.1,-12.54),Vector3(x+2,10.1,-12.54),.12,Color("443f3d"))
-	Geo.beam(parent,Vector3(-2,9.4,-13),Vector3(-2,6.1,-13),.035,Color("303b42"))
-	Geo.cylinder(parent,Vector3(-2,6,-13),.18,.3,Color("d3b770"))
-	for x in [-18,18]: lamp(parent,Vector3(x,5,-10),Color("c8e4e8"),2)
-	# Skyline outside the playable boundary adds dock context without extra collision.
-	for i in range(8):
-		Geo.box(parent,Vector3(-30+i*9,2.5+(i%3),-29),Vector3(7,5+(i%3)*2,5),Color("597887"),false,"panel")
-
-static func sunspire(parent: Node3D) -> void:
-	var stone = Color("e3c294")
-	var blue = Color("3b8994")
-	# Central terrace, two long side routes, and covered courtyard pockets.
-	Geo.box(parent,Vector3(0,1,-2),Vector3(8,2,6),stone,true,"brick")
-	ramp(parent,Vector3(0,0,5),3.4,8,2,Color("dfc393"))
+static func stairs(parent: Node3D, origin: Vector3, width: float, run: float, rise: float, color: Color) -> Node3D:
+	var body = ramp(parent,origin,width,run,rise,color)
+	body.get_child(0).free() # Invisible ramp collider; visible steps cannot z-fight its sides.
+	body.set_meta("stairs",true)
+	# The visible treads have NO collision. One uninterrupted wedge is the walking surface.
+	var count = 20
+	for i in range(count):
+		var h = rise*(i+.5)/count
+		Geo.box(body,Vector3(0,h*.5,run*.5-run*(i+.5)/count),Vector3(width,h,run/count),color,false,"concrete")
+		Geo.box(body,Vector3(0,rise*(i+1)/count,run*.5-run*(i+1)/count),Vector3(width,.035,.06),color.lightened(.14))
 	for side in [-1,1]:
-		Geo.box(parent,Vector3(side*12,1.5,-3),Vector3(3,3,3),stone,true,"brick")
-		Geo.box(parent,Vector3(side*6.8,1.3,11),Vector3(2.5,2.6,4),blue,true,"tile")
-		# Arched facade assembled around a real open passage, rather than a painted door.
-		for dx in [-2,2]:
-			Geo.box(parent,Vector3(side*10+dx,2,-13),Vector3(.7,4,.8),stone,true,"brick")
-		Geo.box(parent,Vector3(side*10,4.3,-13),Vector3(4.8,.7,.8),stone,true,"brick")
-		Geo.box(parent,Vector3(side*10,4.7,-13),Vector3(5,.12,1),Color("bf774f"))
-		Geo.box(parent,Vector3(side*17,2.7,-2),Vector3(2.5,.15,6),Color("a75b48"))
-		for z in [-4,0]:
-			Geo.box(parent,Vector3(side*16,1.35,z),Vector3(.12,2.7,.12),Color("4f6566"))
-		Geo.sign_text(parent,Vector3(side*12,2,-1.46),"EAST" if side>0 else "WEST",22,Color("604a38"))
-	# Split fountain spire on the terrace gives a readable high-ground landmark.
-	Geo.cylinder(parent,Vector3(0,2.12,-2),1.25,.24,blue)
-	Geo.box(parent,Vector3(0,3.2,-2),Vector3(.75,2.2,.75),stone,true,"tile")
-	for y in [2.35,3.45,4.25]:
-		Geo.box(parent,Vector3(0,y,-2),Vector3(1.05,.15,1.05),Color("c18850"))
-	for x in [-18,18]:
-		for z in [-10,8]:
-			Geo.cylinder(parent,Vector3(x,.35,z),.65,.7,Color("b97857"))
-			Geo.cylinder(parent,Vector3(x,1.8,z),.11,2.8,Color("8a7352"))
-			for angle in range(6):
-				var branch = Geo.box(parent,Vector3(x,3,z),Vector3(.25,.10,2.6),Color("5c8263"))
-				branch.rotation = Vector3(.22,angle*TAU/6,0)
-	for x in range(-18,19,3):
-		Geo.box(parent,Vector3(x,.025,15),Vector3(1.6,.02,.18),blue)
-	for x in [-27,25]:
-		Geo.box(parent,Vector3(x,5,-26),Vector3(9,10,10),stone,false,"brick")
-		Geo.cylinder(parent,Vector3(x,12,-26),2.2,4,stone)
-		Geo.sphere(parent,Vector3(x,14,-26),2.25,Color("51a0a4"))
+		for t in [0.0,.5,1.0]:
+			Geo.box(body,Vector3(side*(width*.5+.05),rise*t+.48,run*.5-run*t),Vector3(.06,.96,.06),Color("53666a"))
+		Geo.beam(body,Vector3(side*(width*.5+.05),1,run*.5),Vector3(side*(width*.5+.05),rise+1,-run*.5),.06,Color("a9b7b1"))
+	return body
 
-static func relay(parent: Node3D) -> void:
-	var dark = Color("3b5667")
-	var pale = Color("94b4bc")
-	for x in [-6,6]:
-		Geo.box(parent,Vector3(x,1.65,0),Vector3(3,3.3,7),dark,true,"panel")
-		for z in [-2,0,2]:
-			Geo.box(parent,Vector3(x,1.8,z),Vector3(3.04,1.2,.5),pale,false,"metal")
-			for side in [-1,1]:
-				var display = Geo.box(parent,Vector3(x+side*1.53,2,z),Vector3(.025,.28,.48),Color("78c2b6"))
-				display.get_child(0).material_override = Geo.material(Color("78c2b6"),.7)
-		Geo.box(parent,Vector3(x,3.5,0),Vector3(3.3,.15,7.2),Color("d4af60"))
-	# Upper service bridge accessible by ramp. The entire floor beneath stays connected.
-	Geo.box(parent,Vector3(0,2.8,-8),Vector3(11,.4,3),pale,true,"metal")
-	for x in [-5,5]:
-		Geo.box(parent,Vector3(x,1.4,-8),Vector3(.35,2.8,.35),dark,true,"metal")
-	ramp(parent,Vector3(-9.5,0,-8),3,8,3,pale).rotation.y = -PI/2
-	for x in [-4,4]:
-		Geo.box(parent,Vector3(x,3.5,-9.45),Vector3(.08,1,.08),Color("d4af60"))
-	Geo.beam(parent,Vector3(-4,4,-9.45),Vector3(4,4,-9.45),.08,Color("d4af60"))
-	container(parent,Vector3(-12,.85,8),Vector3(3,1.7,2.5),Color("a97849"),"POWER / 02")
-	container(parent,Vector3(12,.85,-9),Vector3(3,1.7,2.5),Color("547b86"),"COMMS / 04")
-	for z in [-14,-6,2,10]:
-		Geo.box(parent,Vector3(0,8.6,z),Vector3(39,.45,.45),dark)
-		for x in [-15,0,15]: lamp(parent,Vector3(x,8.3,z),Color("acdce2"),4)
-	# Partial roof: bright skylight strips preserve orientation and boost readability.
-	for x in [-15,15]:
-		Geo.box(parent,Vector3(x,9,0),Vector3(9,.3,38),dark,true,"panel")
-	for x in [-18.8,18.8]:
-		var pipe = Geo.cylinder(parent,Vector3(x,6,0),.24,36,Color("d9aa63"))
-		pipe.rotation.x = PI/2
-	for z in range(-16,18,3):
-		Geo.box(parent,Vector3(0,.025,z),Vector3(.16,.025,1.2),Color("d7bd70"))
-	Geo.sign_text(parent,Vector3(0,1.5,17.5),"RELAY / KEEP MOVING",35,Color("e0cc9b")).rotation.y = PI
+static func building(parent: Node3D, block: Vector3, color: Color, trim: Color, index: int, number: int) -> void:
+	var root = Node3D.new()
+	parent.add_child(root)
+	root.position = Vector3(block.x,0,block.y)
+	root.rotation.y = block.z
+	root.set_meta("building",true)
+	var material = "brick" if index in [0,2] else "panel"
+	var floor_color = Color("b7b9a8") if index!=3 else Color("889b9e")
+	Geo.box(root,Vector3(0,3.06,0),Vector3(12,.28,10),floor_color,true,"concrete")
+	Geo.box(root,Vector3(0,6.26,0),Vector3(12.6,.28,10.6),floor_color,true,"concrete")
+	for level in range(2):
+		var base = level*3.2
+		for side in [-1,1]:
+			# Wide central doors and two real window openings on each street facade.
+			for x in [-5.6,-2.8,2.8,5.6]:
+				Geo.box(root,Vector3(x,base+1.6,side*5),Vector3(.8,3.2,.35),color,true,material)
+			for x in [-4.2,4.2]:
+				Geo.box(root,Vector3(x,base+.55,side*5),Vector3(2,1.1,.35),color,true,material)
+				Geo.box(root,Vector3(x,base+2.8,side*5),Vector3(2,.8,.35),color,true,material)
+				Geo.box(root,Vector3(x,base+1.1,side*5.08),Vector3(2.2,.12,.48),trim)
+			Geo.box(root,Vector3(0,base+2.85,side*5),Vector3(4.8,.7,.35),color,true,material)
+			# Side walls: ground-floor passage; upper stair entrance on the east side.
+			if level==1 and side==1:
+				Geo.box(root,Vector3(6,base+1.6,1.6),Vector3(.35,3.2,6.8),color,true,material)
+				Geo.box(root,Vector3(6,base+1.6,-4.7),Vector3(.35,3.2,.6),color,true,material)
+				Geo.box(root,Vector3(6,base+2.9,-3.1),Vector3(.35,.6,2.6),color,true,material)
+			else:
+				for z in [-3.25,3.25]: Geo.box(root,Vector3(side*6,base+1.6,z),Vector3(.35,3.2,3.5),color,true,material)
+				Geo.box(root,Vector3(side*6,base+2.85,0),Vector3(.35,.7,3),color,true,material)
+		# Interior columns and waist-high workbenches leave the central cross-route open.
+		for x in [-4,4]:
+			Geo.box(root,Vector3(x,base+1.6,-2.4),Vector3(.3,3.2,.3),trim,true,"metal")
+			Geo.box(root,Vector3(x,base+.45,2.4),Vector3(1.5,.9,.85),trim,true,"wood" if index==2 else "panel")
+		for side in [-1,1]:
+			Geo.box(root,Vector3(0,base+3.14,side*5.23),Vector3(12.5,.14,.2),trim)
+			Geo.box(root,Vector3(0,base+2.7,side*5.9),Vector3(4,.12,1.6),trim)
+			for x in [-2,2]: Geo.box(root,Vector3(x,base+1.35,side*6.45),Vector3(.09,2.7,.09),trim)
+	stairs(root,Vector3(7.7,0,.6),2.6,8,3.2,floor_color)
+	Geo.box(root,Vector3(7.1,3.06,-4.2),Vector3(2.6,.28,1.6),floor_color,true,"metal")
+	# Low parapets protect roof edges without enclosing the boost landing area.
+	for side in [-1,1]:
+		Geo.box(root,Vector3(0,6.65,side*5.1),Vector3(12,.5,.22),color,true,material)
+		Geo.box(root,Vector3(side*6.1,6.65,0),Vector3(.22,.5,10),color,true,material)
+	Geo.box(root,Vector3(-3,6.85,-2),Vector3(2,.9,1.7),trim,true,"panel")
+	for x in [-3.5,-2.5]:
+		var fan = Geo.cylinder(root,Vector3(x,7.32,-2),.35,.08,Color("405258"))
+		for angle in range(3):
+			var blade = Geo.box(fan,Vector3.ZERO,Vector3(.55,.03,.10),Color("94aaa7"))
+			blade.rotation.y = angle*PI/3
+	Geo.sign_text(root,Vector3(0,2.5,5.22),["SMELT / WORKSHOP","HARBOR OFFICE","MERCATO","COMMS LAB"][index]+" 0"+str(number+1),23,Color("f2dfaf"))
+	var route: Array = []
+	for point in [Vector3(7.7,.05,5.4),Vector3(7.7,.45,3.5),Vector3(7.7,1.25,1.5),Vector3(7.7,2.05,-.5),Vector3(7.7,2.85,-2.5),Vector3(7.7,3.25,-4.1),Vector3(5,3.25,-3.6),Vector3(2,3.25,-3.6),Vector3(0,3.25,0),Vector3(0,3.25,3.6)]:
+		route.append(root.to_global(point))
+	var routes: Array = parent.get_meta("upper_routes",[])
+	routes.append(route)
+	parent.set_meta("upper_routes",routes)
 
-static func foundry_details(parent: Node3D) -> void:
-	for x in [-18,-10,2,14]:
-		Geo.box(parent,Vector3(x,3.3,-18.48),Vector3(2.3,1.5,.10),Color("243e4e"),false,"panel")
-		Geo.box(parent,Vector3(x,3.3,-18.40),Vector3(.08,1.5,.06),Color("82a6ad"))
-	for x in [-19.4,19.4]:
-		var pipe = Geo.cylinder(parent,Vector3(x,4,0),.12,32,Color("aa9067"))
-		pipe.rotation.x = PI/2
-	lamp(parent,Vector3(-15,5.8,-15),Color("e9d4a3"),2)
-	lamp(parent,Vector3(15,5.8,-15),Color("b6dce4"),2)
-	for i in range(6):
-		Geo.box(parent,Vector3(-25+i*10,4,-29),Vector3(7,8+(i%3)*3,8),Color("78919b"),false,"brick")
+static func build(parent: Node3D, index: int) -> void:
+	var ground = [Color("a2aaa0"),Color("99a7a7"),Color("d8c49d"),Color("748c95")][index]
+	var wall = [Color("ac6950"),Color("d5c6a8"),Color("e2bb83"),Color("bccbd0")][index]
+	var trim = [Color("3c777d"),Color("396b89"),Color("3c9294"),Color("3f6e7f")][index]
+	Geo.box(parent,Vector3(0,-.3,0),Vector3(64,.6,62),ground,true,FLOORS[index])
+	# Streets, sidewalks and floor markings establish traversable lanes.
+	Geo.box(parent,Vector3(0,.012,0),Vector3(9,.02,60),ground.darkened(.26),false,"concrete")
+	for side in [-1,1]:
+		Geo.box(parent,Vector3(side*4.6,.025,0),Vector3(.15,.03,60),Color("d4c592"))
+		for z in range(-27,28,6): Geo.box(parent,Vector3(side*1.7,.03,z),Vector3(.1,.025,2),Color("ded4b4"))
+	for number in range(BLOCKS[index].size()): building(parent,BLOCKS[index][number],wall,trim,index,number)
+	# Boundary reads as a district edge, with skyline outside and a clear playable railing.
+	for side in [-1,1]:
+		Geo.box(parent,Vector3(side*31,1.1,0),Vector3(.4,2.2,62),trim,true,"metal")
+		Geo.box(parent,Vector3(0,1.1,side*30),Vector3(62,2.2,.4),trim,true,"metal")
+		for z in range(-27,29,7):
+			Geo.box(parent,Vector3(side*34,4,z),Vector3(4,8,5),wall.darkened(.25),false,"brick")
+			for y in [2.5,5.5]: Geo.box(parent,Vector3(side*31.95,y,z),Vector3(.04,1.3,2),trim)
+		var boundary = StaticBody3D.new()
+		parent.add_child(boundary)
+		for axis in range(2):
+			var shape = CollisionShape3D.new()
+			shape.shape = BoxShape3D.new()
+			shape.shape.size = Vector3(.5,45,64) if axis==0 else Vector3(64,45,.5)
+			shape.position = Vector3(side*31.5,22,0) if axis==0 else Vector3(0,22,side*30.5)
+			boundary.add_child(shape)
+	# Offset cover protects the long street while preserving flank routes and all spawns.
+	for pos in [Vector3(-2.4,.65,-8),Vector3(2.4,.65,11),Vector3(-21,.65,15),Vector3(22,.65,-16)]:
+		Geo.crate(parent,pos,Vector3(2.8,1.3,1.5),trim)
+	match index:
+		0: foundry(parent,wall,trim)
+		1: dock(parent,wall,trim)
+		2: sunspire(parent,wall,trim)
+		3: relay(parent,wall,trim)
+	Geo.box(parent,PADS[index]-Vector3.UP*.04,Vector3(2,.025,2),Color("d2ae61"))
+
+static func foundry(parent: Node3D, wall: Color, trim: Color) -> void:
+	# A furnace pavilion with an open passage and exposed exhaust stacks.
+	for x in [-3,3]:
+		Geo.box(parent,Vector3(x,2.5,-20),Vector3(.5,5,.5),trim,true,"metal")
+	Geo.box(parent,Vector3(0,5.2,-20),Vector3(8,.5,5),trim,true,"metal")
+	for x in [-2,2]:
+		Geo.box(parent,Vector3(x,1.4,-21),Vector3(1.8,2.8,2),wall,true,"brick")
+		Geo.cylinder(parent,Vector3(x,6.7,-21),.65,4,trim)
+	for x in [-26,26]:
+		Geo.box(parent,Vector3(x,.35,0),Vector3(2,.7,9),wall,true,"brick")
+		for z in [-3,0,3]: Geo.cylinder(parent,Vector3(x,1.9,z),.55,2.4,trim)
+
+static func dock(parent: Node3D, _wall: Color, trim: Color) -> void:
+	# Two loading gantries frame the harbor; open dock sheds interrupt long angles.
+	for z in [-21,21]:
+		for x in [-9,9]: Geo.box(parent,Vector3(x,5,z),Vector3(.6,10,.6),Color("c49a53"),true,"metal")
+		Geo.box(parent,Vector3(0,10,z),Vector3(19,.65,.8),Color("c49a53"))
+		for x in range(-8,8,2): Geo.beam(parent,Vector3(x,9.7,z),Vector3(x+2,10.4,z),.1,trim)
+		Geo.beam(parent,Vector3(0,9.8,z),Vector3(0,6,z),.045,trim)
+	for x in [-25,25]:
+		Geo.box(parent,Vector3(x,3,0),Vector3(5,.3,7),trim,true,"panel")
+		for z in [-3,3]: Geo.box(parent,Vector3(x,1.5,z),Vector3(.2,3,.2),trim,true,"metal")
+	Geo.box(parent,Vector3(0,-.5,-43),Vector3(100,.1,24),Color("377b8a"))
+
+static func sunspire(parent: Node3D, wall: Color, trim: Color) -> void:
+	# Two market arcades, fountain and planted courtyard edges.
+	for side in [-1,1]:
+		for x in [-4,0,4]:
+			Geo.box(parent,Vector3(x,1.7,side*22),Vector3(.6,3.4,.6),wall,true,"brick")
+		Geo.box(parent,Vector3(0,3.5,side*22),Vector3(10,.35,4),Color("b66f4e"),true,"tile")
+	Geo.box(parent,Vector3(0,.35,-7),Vector3(2.8,.7,2.8),wall,true,"tile")
+	Geo.cylinder(parent,Vector3(0,.75,-7),1.15,.12,trim)
+	Geo.box(parent,Vector3(0,1.8,-7),Vector3(.6,2.1,.6),wall,true,"tile")
+	for x in [-25,25]:
+		for z in [-13,13]:
+			Geo.box(parent,Vector3(x,.45,z),Vector3(2,.9,2),wall,true,"brick")
+			Geo.cylinder(parent,Vector3(x,2,z),.14,3.3,Color("826543"))
+			for turn in range(6):
+				var leaf = Geo.sphere(parent,Vector3(x,3.7,z),.9,Color("547a5b"))
+				leaf.scale = Vector3(.55,.22,2.4)
+				leaf.rotation = Vector3(.2,turn*TAU/6,0)
+
+static func relay(parent: Node3D, _wall: Color, trim: Color) -> void:
+	# Open communications court and antenna towers; roof height stays boost-accessible.
+	Geo.box(parent,Vector3(0,3.06,-18),Vector3(15,.28,3),trim,true,"metal")
+	stairs(parent,Vector3(-8,0,-12.5),2.8,8,3.2,Color("9bb0b5"))
+	Geo.box(parent,Vector3(-7.5,3.06,-17.2),Vector3(3,.28,2),trim,true,"metal")
+	for x in [-6,6]: Geo.box(parent,Vector3(x,1.5,-18),Vector3(.35,3,.35),trim,true,"metal")
+	for x in [-25,25]:
+		Geo.box(parent,Vector3(x,1,0),Vector3(3,2,4),trim,true,"panel")
+		Geo.cylinder(parent,Vector3(x,5,0),.24,6,Color("bac8c5"))
+		for y in [6,7.5]: Geo.box(parent,Vector3(x,y,0),Vector3(2,.2,.5),Color("bd9554"))
+	for z in [-26,26]:
+		Geo.box(parent,Vector3(0,2.5,z),Vector3(4,5,.8),trim,true,"panel")
+		Geo.sign_text(parent,Vector3(0,3,z+.45),"UPLINK",28,Color("a8e7dc"))

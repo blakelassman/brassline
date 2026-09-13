@@ -6,6 +6,7 @@ var target_name = "Player"
 var health = 100
 var weapon = 0
 var crouched = false
+var parry_timer = 0.0
 var reload_timer = 0.0
 var hurt_flash = 0.0
 var life_id = 0
@@ -37,6 +38,7 @@ func receive(row: Array, time: float) -> void:
 	weapon = row[6]
 	crouched = row[7]
 	reload_timer = row[9]
+	parry_timer = row[10] if row.size()>10 else 0.0
 	collision_layer = 4 if health>0 else 0
 	body_shape.shape.height = 1.1 if crouched else 1.8
 	body_shape.position.y = body_shape.shape.height*.5

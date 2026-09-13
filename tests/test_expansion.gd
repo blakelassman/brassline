@@ -61,14 +61,19 @@ func run(game: Node) -> void:
 		surfaces[game.surface_at(Vector3(17,.05,16))] = true
 	check(surfaces.has("metal") and surfaces.has("tile") and surfaces.has("concrete"),"Surface footsteps distinguish deck, tile and concrete")
 	check(game.audio.has("mag_out") and game.audio.has("mag_in") and game.audio.has("smoke_hiss") and game.audio.has("ambient_relay"),"Expanded foley and ambience load")
-	# Actual movement must climb each new route and join its platform.
-	for data in [[1,Vector3(13,.1,4.9),Vector3(13,2.4,-4),0.0],[2,Vector3(0,.1,9.2),Vector3(0,2,-.6),0.0],[3,Vector3(-14,.1,-8),Vector3(-4,3,-8),-PI/2]]:
-		await game.start_mode("training",data[0])
-		game.player.reset_at(data[1])
-		game.player.rotation.y=data[3]
-		Input.action_press("forward")
-		await frames(85)
-		Input.action_release("forward")
-		check(game.player.position.y>data[2].y-.25,game.Maps.NAMES[data[0]]+": player can walk up the ramp onto high ground")
+	# Walk every building staircase, then step through its upper-floor doorway.
+	for index in range(4):
+		await game.start_mode("training",index)
+		for route in game.world_root.get_meta("upper_routes",[]):
+			game.player.reset_at(route[0])
+			var direction = route[1]-route[0]
+			game.player.rotation.y = atan2(-direction.x,-direction.z)
+			Input.action_press("forward")
+			for tick in range(120):
+				await frames(1)
+				if game.player.position.y>=3.15: break
+			print("STAIR ",route[0]," -> ",game.player.position)
+			Input.action_release("forward")
+			check(game.player.position.y>3.0,game.Maps.NAMES[index]+": continuous stair collider reaches second floor")
 	print("RESULT ",checks-failures.size(),"/",checks," expansion checks passed")
 	get_tree().quit(0 if failures.is_empty() else 1)

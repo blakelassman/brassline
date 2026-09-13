@@ -1,8 +1,24 @@
-# BRASSLINE 0.7.1
+# BRASSLINE 0.8.0
 
 A free Windows Godot FPS prototype with movement-focused combat, offline practice,
 and self-hosted internet multiplayer. Extract the complete ZIP and run
 `START_BRASSLINE.bat`. See `START_HERE.txt` for controls and `HOSTING.txt` for hosting.
+
+## New in 0.8.0
+
+- Scope sensitivity follows the current FOV, including the zoom transition.
+- Borderless fullscreen, resolution presets through 4K, custom window sizes and
+  a consistent 16:9 play area. Loading a match no longer reapplies window mode.
+- Minimal HUD; ping/FPS moved to Tab. Teammates stay on the minimap; gunfire
+  reveals an enemy's last shot position for two seconds, with elevation markers.
+- Slight counter-strafe momentum; sword attacks deal 100 damage. Right-click
+  parries frontal sword attacks for 280 ms, with 750 ms between guards.
+- All four arenas rebuilt as distinct districts with two-story interiors,
+  continuous ramp collision under visible stairs, upper bot routes and solid
+  grenade-accessible roofs. Original armor, weapon geometry and parry sound.
+
+Everyone must run this version together (network protocol 9). Existing saves
+and UDP 27020 settings carry over. See `docs/UPDATE_0_8.md` for validation details.
 
 ## Play
 
@@ -18,7 +34,10 @@ Respawns remain instant with no shields. Ctrl/C crouch; all controls are rebinda
 
 ## Free and portable
 
-Godot 4.7.2 Standard for 64-bit Windows is included. No editor installation,
+Portable packages include Godot 4.7.2 Standard for 64-bit Windows. The source
+repository excludes engine binaries: keep the `engine` folder from your existing
+BRASSLINE download beside `project.godot`, or open `project.godot` with Godot
+4.7.2 Standard. No paid editor installation,
 paid assets, account, database or rented server is needed. Networking uses ENet
 UDP, default port 27020. Friends outside your home use your public IP and port;
 your router must forward the UDP port to your host PC.
@@ -36,7 +55,8 @@ The dedicated server has a separate `server_profile_v1.json`.
 - Immediate local movement and weapon/grenade presentation, with numbered input
   replay only during physics ticks and redundant UDP input delivery.
 - Host-owned damage/score; bounded historical hitbox checks compensate for the
-  moving-target position displayed to the shooter, with a 500 ms maximum rewind.
+  moving-target position displayed to the shooter, with a 500 ms rewind limit when a shot is received; validated timestamps survive
+  the bounded server command queue.
 - Per-player time budgets constrain input simulation; old-life shots are rejected.
 - Twenty state updates per second, compressed and split below the UDP MTU;
   adaptive remote interpolation, confirmed hit/kill feedback and map transitions.

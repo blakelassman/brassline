@@ -2,7 +2,8 @@
 setlocal
 cd /d "%~dp0"
 if not exist "engine\Godot_v4.7.2-stable_win64.exe" (
-  echo The game engine is missing. Extract the entire ZIP first.
+  echo The engine folder is missing. Copy it from your previous Brassline download.
+  echo Put engine beside project.godot. See START_HERE.txt for source checkout setup.
   pause
   exit /b 1
 )

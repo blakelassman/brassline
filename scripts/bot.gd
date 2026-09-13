@@ -44,13 +44,9 @@ func _ready() -> void:
 	goal = combat.patrol_goal()
 	weapon_node = Node3D.new()
 	add_child(weapon_node)
-	Geo.box(weapon_node,Vector3(.28,1.1,.38),Vector3(.14,.14,.5),Color("263740"))
-	Geo.box(weapon_node,Vector3(.28,1.1,.72),Vector3(.06,.06,.22),Color("b88a45"))
-	if role_id==2:
-		Geo.box(weapon_node,Vector3(.28,1.22,.36),Vector3(.09,.1,.28),Color("739293"))
-		Geo.box(weapon_node,Vector3(.28,1.1,.80),Vector3(.04,.04,.3),Color("263740"))
-	elif role_id==1:
-		Geo.box(weapon_node,Vector3(.28,1.02,.5),Vector3(.16,.08,.35),Color("bc9860"))
+	var gun = preload("res://scripts/weapon_art.gd").world(weapon_node,0)
+	gun.position = Vector3(.28,1.1,.32)
+	gun.rotation.y = PI
 	muzzle = Geo.sphere(weapon_node,Vector3(.28,1.1,.87),.10,Color("ffeac0"))
 	muzzle.material_override.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	muzzle.visible = false
@@ -89,7 +85,8 @@ func _physics_process(delta: float) -> void:
 	time += delta
 	muzzle_time = maxf(0,muzzle_time-delta)
 	muzzle.visible = muzzle_time>0
-	title.text = (game.net.display_name(target_name) if game.net.running else target_name)+"\n"+str(health)+" HP / "+profile.name
+	title.text = game.net.display_name(target_name) if game.net.running else target_name
+	title.visible = team==game.player.team and global_position.distance_to(game.player.global_position)<18 and combat.sight_clear(game.player.camera.global_position,global_position+Vector3.UP*1.7)
 	shot_timer = maxf(0,shot_timer-delta)
 	memory_time = maxf(0,memory_time-delta)
 	if reload_time>0:
@@ -144,7 +141,7 @@ func _physics_process(delta: float) -> void:
 			look_at(global_position+movement,Vector3.UP,true)
 	# Local separation prevents a group from choosing the same walking line.
 	for actor in combat.actors():
-		if actor == self or actor.health<=0:
+		if actor == self or actor.health<=0 or absf(actor.global_position.y-global_position.y)>1.5:
 			continue
 		var away = global_position-actor.global_position
 		away.y = 0

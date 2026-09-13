@@ -1,5 +1,8 @@
 extends Node3D
 
+var radar = preload("res://scripts/radar.gd").new()
+var applied_display = ""
+
 const Progression = preload("res://scripts/progression.gd")
 var progression = Progression.new()
 const Network = preload("res://scripts/network.gd")
@@ -99,6 +102,8 @@ func _ready() -> void:
 	hud.game = self
 	canvas.add_child(hud)
 	apply_settings()
+	apply_display_settings()
+	get_window().size_changed.connect(_apply_render_resolution)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var args = OS.get_cmdline_user_args()
 	if "--profile-write-test" in args:
@@ -118,6 +123,10 @@ func _ready() -> void:
 		call_deferred("_prediction_test")
 	elif "--network-test" in args:
 		call_deferred("_network_test")
+	elif "--display-test" in args:
+		call_deferred("_display_test")
+	elif "--polish-test" in args:
+		call_deferred("_polish_test")
 	elif "--settings-test" in args:
 		call_deferred("_settings_test")
 	elif "--expansion-test" in args:
@@ -130,20 +139,11 @@ func _ready() -> void:
 		call_deferred("_self_test")
 	elif Array(args).any(func(arg): return arg.begins_with("--capture")):
 		call_deferred("_capture")
-	print("BRASSLINE ready | multiplayer prototype 0.7.1 | Godot ", Engine.get_version_info()["string"])
+	print("BRASSLINE ready | multiplayer prototype 0.8.0 | Godot ", Engine.get_version_info()["string"])
 
 func _training_targets() -> void:
-	if current_map>0:
-		var names = ["WALL PEEK","STRAFE","HIGH GROUND","CLOSE RANGE","TEAMMATE","COLLATERAL A","COLLATERAL B"]
-		for i in range(7): _target(Maps.PRACTICE[current_map][i],names[i],i==1,1 if i==4 else 2)
-		return
-	_target(Vector3(-6, 0.04, -8), "WALL PEEK", false)
-	_target(Vector3(3.0, 0.04, -8.5), "STRAFE", true)
-	_target(Vector3(10.0, 2.24, -12), "HIGH GROUND", false)
-	_target(Vector3(-13, 0.04, -1), "CLOSE RANGE", false)
-	_target(Vector3(6, 0.04, 3), "TEAMMATE", false, 1)
-	_target(Vector3(-1, 0.04, -7), "COLLATERAL A", false)
-	_target(Vector3(-1, 0.04, -11), "COLLATERAL B", false)
+	var names = ["WALL PEEK","STRAFE","HIGH GROUND","CLOSE RANGE","TEAMMATE","COLLATERAL A","COLLATERAL B"]
+	for i in range(7): _target(Maps.PRACTICE[current_map][i],names[i],i==1,1 if i==4 else 2)
 
 func _inputs() -> void:
 	var keys = {"forward": KEY_W, "back": KEY_S, "left": KEY_A, "right": KEY_D,
@@ -167,65 +167,15 @@ func _inputs() -> void:
 		InputMap.action_add_event(action, event)
 
 func _world() -> void:
+	radar.clear()
 	world_root = Node3D.new()
 	world_root.name = "ArenaGeometry"
 	add_child(world_root)
 	Maps.environment(world_root,current_map)
-	if current_map==0:
-		_foundry()
-		Maps.foundry_details(world_root)
-	else:
-		Maps.build(world_root,current_map)
+	Maps.build(world_root,current_map)
 	launch_pad = Maps.PADS[current_map]
 	Optimizer.batch(world_root)
 
-func _foundry() -> void:
-	var concrete = Color("d3c8ad")
-	var teal = Color("386773")
-	var red = Color("b94f35")
-	var steel = Color("31444a")
-	Geo.box(world_root, Vector3(0,-0.3,0), Vector3(42,0.6,40), concrete, true)
-	Geo.box(world_root, Vector3(0,2.5,-19), Vector3(42,5,0.8), teal, true)
-	Geo.box(world_root, Vector3(-20,2.5,0), Vector3(0.8,5,40), teal, true)
-	Geo.box(world_root, Vector3(20,2.5,0), Vector3(0.8,5,40), concrete, true)
-	Geo.box(world_root, Vector3(0,2.5,19), Vector3(42,5,0.8), concrete, true)
-	# Tall invisible outer collision only: a boost must not escape the practice arena.
-	for edge in [Vector3(-21,18,0),Vector3(21,18,0),Vector3(0,18,-20),Vector3(0,18,20)]:
-		var barrier = StaticBody3D.new()
-		world_root.add_child(barrier)
-		barrier.position = edge
-		var collision = CollisionShape3D.new()
-		var bounds = BoxShape3D.new()
-		bounds.size = Vector3(1,36,44) if edge.x != 0 else Vector3(44,36,1)
-		collision.shape = bounds
-		barrier.add_child(collision)
-	for x in range(-18,20,4):
-		Geo.box(world_root, Vector3(x,0.007,0), Vector3(0.025,0.013,38), Color("b0aa95"))
-	for z in range(-18,20,4):
-		Geo.box(world_root, Vector3(0,0.009,z), Vector3(40,0.015,0.025), Color("b0aa95"))
-	# The signature drill: launch at the yellow pad, rise above cover, headshot the target.
-	Geo.box(world_root, Vector3(-6,1.15,-4), Vector3(5.0,2.3,0.55), red, true)
-	Geo.box(world_root, Vector3(-6,2.34,-4), Vector3(5.1,0.09,0.67), Color("f5bb55"))
-	Geo.sign_text(world_root, Vector3(-6,1.05,-3.70), "01 / WALL PEEK", 34, Color("fff0ce"))
-	Geo.box(world_root, Vector3(-6,0.016,6), Vector3(3.8,0.025,3.8), Color("e0ae4b"))
-	for offset in [-1.6,1.6]:
-		Geo.box(world_root, Vector3(-6+offset,0.04,6), Vector3(0.10,0.04,3.3), steel)
-		Geo.box(world_root, Vector3(-6,0.04,6+offset), Vector3(3.3,0.04,0.10), steel)
-	Geo.sign_text(world_root, Vector3(-6,3.35,-18.54), "BRASSLINE", 135, Color("f6e9c9"))
-	Geo.sign_text(world_root, Vector3(-6,2.15,-18.53), "FOUNDRY YARD / MOVEMENT LAB", 31, Color("edc079"))
-	Geo.box(world_root, Vector3(10,1.1,-12), Vector3(5.8,2.2,5), teal, true)
-	for i in range(4):
-		Geo.box(world_root,Vector3(13.2+i*0.6,0.25*(4-i),-9),Vector3(0.6,0.5*(4-i),3),concrete,true)
-	Geo.sign_text(world_root,Vector3(10,1.1,-9.44),"03 / HIGH GROUND",28,Color("f2e5c5"))
-	for x in [-16,16]:
-		Geo.box(world_root,Vector3(x,3.5,-15),Vector3(0.3,7,0.3),steel,true)
-	Geo.box(world_root,Vector3(0,6.9,-15),Vector3(32.3,0.35,0.5),steel)
-	for x in [-15,-11,-7,-3,1,5,9,13]:
-		Geo.box(world_root,Vector3(x,5.0,-18.48),Vector3(2.8,0.28,0.10),Color("ce8755"))
-	for pos in [Vector3(-15,0.75,9),Vector3(-13,0.75,10),Vector3(11,0.75,8)]:
-		Geo.box(world_root,pos,Vector3(1.8,1.5,1.8),teal,true)
-		Geo.box(world_root,pos+Vector3(0,0.78,0),Vector3(1.9,0.08,1.9),steel)
-	Geo.sign_text(world_root,Vector3(4,2.6,-18.5),"02 / TRACKING",40,Color("f1dfb8"))
 
 func _target(pos: Vector3, title: String, moving: bool, team: int = 2) -> void:
 	var target = Target.new()
@@ -238,7 +188,7 @@ func _target(pos: Vector3, title: String, moving: bool, team: int = 2) -> void:
 	targets.append(target)
 
 func _load_audio() -> void:
-	for key in ["rifle","pistol","blast","tick","jump","hit","head","equip","sword","step","sniper","bolt_open","bolt_close","hurt","mag_out","mag_in","slide","empty","land","step_concrete","step_metal","step_tile","grenade_bounce","smoke_hiss","impact_concrete","impact_metal","ui","kill","ambient_foundry","ambient_dock","ambient_sunspire","ambient_relay"]:
+	for key in ["rifle","pistol","blast","tick","jump","hit","head","equip","sword","parry","step","sniper","bolt_open","bolt_close","hurt","mag_out","mag_in","slide","empty","land","step_concrete","step_metal","step_tile","grenade_bounce","smoke_hiss","impact_concrete","impact_metal","ui","kill","ambient_foundry","ambient_dock","ambient_sunspire","ambient_relay"]:
 		audio[key] = AudioStreamWAV.load_from_file("res://assets/%s.wav" % key)
 	ambience = AudioStreamPlayer.new()
 	add_child(ambience)
@@ -283,6 +233,7 @@ func world_sound(key: String, at: Vector3, volume: float, replicate: bool = true
 
 func start_mode(selected: String, map_index: int = -1) -> void:
 	if changing_map: return
+	radar.clear()
 	if net.running and selected!="online": await net.leave()
 	if map_index>=0: selected_map = clampi(map_index,0,3)
 	set_active(false)
@@ -542,6 +493,7 @@ func shoot_ray(origin: Vector3, direction: Vector3, weapon_id: int, airborne: bo
 		_tracer(origin,end)
 		return {}
 	if shooter==null: shooter = player
+	radar.mark(shooter,clock)
 	shot_count += 1
 	action_serial += 1
 	var far_end = origin + direction.normalized() * 150.0
@@ -633,11 +585,15 @@ func melee_attack(shooter: Node = null) -> void:
 			closest = target
 			closest_distance = offset.length()
 	if closest != null:
-		var killed = damage_actor(closest,50,shooter.team,shooter.target_name)
+		if closest.get("parry_timer") != null and closest.parry_timer>0 and Rules.parry_blocks(-closest.global_basis.z,shooter.global_position-closest.global_position):
+			shooter.fire_cooldown = maxf(shooter.fire_cooldown,.85)
+			world_sound("parry",closest.global_position,-8)
+			return
+		var killed = damage_actor(closest,Rules.WEAPONS[2].body,shooter.team,shooter.target_name)
 		net.hit_feedback(shooter,false)
 		if killed:
 			record_kill(closest.target_name,"SWORD",false,false,action_serial,shooter.target_name,shooter.team)
-			notify("CLOSE FINISH", "The sword covers your last few meters.")
+
 
 func _clear_effects() -> void:
 	if is_instance_valid(effects): effects.clear()
@@ -869,8 +825,30 @@ func apply_settings() -> void:
 	Engine.max_fps = int(prefs.data.fps_limit)
 	get_viewport().msaa_3d = Viewport.MSAA_2X if prefs.data.quality==2 else Viewport.MSAA_DISABLED
 	for light in world_root.find_children("*","DirectionalLight3D",true,false): light.shadow_enabled = prefs.data.quality==2
-	if DisplayServer.get_name()!="headless":
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if prefs.data.fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
+func apply_display_settings() -> void:
+	# Window mode changes only on startup or Apply Display, never on match load.
+	if DisplayServer.get_name()=="headless": return
+	var requested = "%s/%d/%d" % [prefs.data.fullscreen,prefs.data.resolution_width,prefs.data.resolution_height]
+	if requested==applied_display: return
+	var window = get_window()
+	var desired = Window.MODE_FULLSCREEN if prefs.data.fullscreen else Window.MODE_WINDOWED
+	if window.mode!=desired: window.mode = desired
+	if not prefs.data.fullscreen:
+		var usable = DisplayServer.screen_get_usable_rect(window.current_screen)
+		var resolution = Vector2(prefs.data.resolution_width,prefs.data.resolution_height)
+		var limit = Vector2(usable.size-Vector2i(32,64))
+		resolution *= minf(1,minf(limit.x/resolution.x,limit.y/resolution.y))
+		var pixels = Vector2i(resolution)
+		if window.size!=pixels:
+			window.size = pixels
+			window.position = usable.position+(usable.size-pixels)/2
+	applied_display = requested
+	_apply_render_resolution()
+func _apply_render_resolution() -> void:
+	if DisplayServer.get_name()=="headless": return
+	var window = get_window()
+	var play_height = minf(window.size.y,window.size.x*9.0/16.0)
+	window.scaling_3d_scale = clampf(minf(prefs.data.resolution_height,prefs.data.resolution_width*9.0/16.0)/maxf(1,play_height),.25,1.0) if prefs.data.fullscreen else 1.0
 func _dedicated_server() -> void:
 	var config = ConfigFile.new()
 	config.load("res://server.cfg")
@@ -899,5 +877,15 @@ func _prediction_test() -> void:
 
 func _lagcomp_test() -> void:
 	var suite = load("res://tests/test_lag_compensation.gd").new()
+	add_child(suite)
+	await suite.run(self)
+
+func _polish_test() -> void:
+	var suite = load("res://tests/test_polish.gd").new()
+	add_child(suite)
+	await suite.run(self)
+
+func _display_test() -> void:
+	var suite = load("res://tests/test_display.gd").new()
 	add_child(suite)
 	await suite.run(self)

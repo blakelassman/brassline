@@ -31,7 +31,7 @@ static func batch(root: Node3D, excluded: Array = [], vertex_colors: bool = fals
 				var vertices = arrays[Mesh.ARRAY_VERTEX]
 				var normals = arrays[Mesh.ARRAY_NORMAL]
 				var indices = arrays[Mesh.ARRAY_INDEX]
-				if indices.is_empty(): indices = range(vertices.size())
+				if indices==null or indices.is_empty(): indices = range(vertices.size())
 				var normal_basis = transform.basis.inverse().transposed()
 				for i in indices:
 					st.set_color(instance.material_override.albedo_color)

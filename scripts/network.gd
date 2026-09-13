@@ -8,7 +8,7 @@ const Preferences = preload("res://scripts/preferences.gd")
 const LagCompensation = preload("res://scripts/lag_compensation.gd")
 var lag_comp = LagCompensation.new()
 var lag_rescued_hits = 0
-const PROTOCOL = 8
+const PROTOCOL = 9
 var game: Node
 var running = false
 var server = false
@@ -40,7 +40,7 @@ var applied_packet = 0
 var largest_packet = 0
 var closing = false
 var test_controls: Dictionary = {}
-const INPUT_WINDOW = 12
+const INPUT_WINDOW = 32
 const FIXED_STEP = 1.0/60.0
 var pending_reconciliation: Array = []
 var latest_server_time = 0.0
@@ -82,7 +82,9 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(func(): fail("Connection failed. Check the IP, UDP port, firewall and forwarding."))
 	multiplayer.server_disconnected.connect(func(): fail("The host disconnected. Your confirmed XP is saved."))
 	multiplayer.peer_connected.connect(func(id):
-		if server: pending[id] = {"time":Time.get_ticks_msec(),"authenticated":false,"transport":multiplayer.multiplayer_peer.get_peer(id)})
+		if server:
+			var peer = multiplayer.multiplayer_peer.get_peer(id)
+			pending[id] = {"time":Time.get_ticks_msec(),"authenticated":false,"transport":peer})
 	multiplayer.peer_disconnected.connect(_disconnected)
 func is_client_ready() -> bool: return running and not server and session_ready
 func actors() -> Array:
@@ -283,7 +285,13 @@ func send_input(actor: Node, move: Vector2, jump: bool, aiming: bool) -> void:
 	# lost/reordered UDP packets without waiting for reliable retransmission.
 	inputs.append([sequence,move,jump,actor.held("crouch"),actor.rotation.y,actor.held("aim"),actor.pitch,aiming])
 	while inputs.size()>180: inputs.pop_front()
-	_input_frames.rpc_id(1,actor.life_id,inputs.slice(maxi(0,inputs.size()-INPUT_WINDOW)))
+	var recent = inputs.slice(maxi(0,inputs.size()-INPUT_WINDOW))
+	var packed = var_to_bytes(recent).compress(FileAccess.COMPRESSION_DEFLATE)
+	# Keep every datagram below MTU even during rapid aim changes.
+	while packed.size()>950 and recent.size()>8:
+		recent.pop_front()
+		packed = var_to_bytes(recent).compress(FileAccess.COMPRESSION_DEFLATE)
+	_input_bundle.rpc_id(1,actor.life_id,packed)
 func remember_input(_actor: Node, _move: Vector2, _jump: bool) -> void:
 	pass
 func send_action(action: String, value: int, actor: Node) -> void:
@@ -292,10 +300,14 @@ func send_action(action: String, value: int, actor: Node) -> void:
 	while actions.size()>80: actions.pop_front()
 	_command.rpc_id(1,action_id,actor.life_id,action,value,actor.rotation.y,actor.pitch,sequence,presentation_time)
 @rpc("any_peer","call_remote","unreliable_ordered",1)
-func _input_frames(life: int, frames: Array) -> void:
-	if not server: return
+func _input_bundle(life: int, packed: PackedByteArray) -> void:
+	if not server or packed.size()>1050: return
 	var id = multiplayer.get_remote_sender_id()
-	if peers.has(id): _receive_frames(peers[id],life,frames)
+	if not peers.has(id): return
+	var bytes = packed.decompress_dynamic(8192,FileAccess.COMPRESSION_DEFLATE)
+	if bytes.is_empty(): return
+	var decoded = bytes_to_var(bytes)
+	if decoded is Array: _receive_frames(peers[id],life,decoded)
 func _receive_frames(p: Dictionary, life: int, frames: Array) -> void:
 	var actor = slots[p.slot].actor
 	if life!=actor.life_id or not round_active or not p.get("loaded",true) or frames.size()>INPUT_WINDOW: return
@@ -307,6 +319,7 @@ func _receive_frames(p: Dictionary, life: int, frames: Array) -> void:
 		var seq = int(frame[0])
 		if seq<=p.last_sequence or seq>p.last_sequence+600 or not frame[1].is_finite() or not is_finite(frame[4]) or not is_finite(frame[6]): continue
 		if p.frames.size()>=120: break
+		if p.last_sequence>0: p.frame_gap += maxi(0,seq-p.last_sequence-1)
 		p.last_sequence = seq
 		p.last_input = Time.get_ticks_msec()
 		var clean = frame.duplicate()
@@ -319,7 +332,7 @@ func simulate_remote(actor: Node, delta: float) -> void:
 	var p = peers[actor.peer_id]
 	# Credit is earned using SERVER time, never client-supplied delta. A small
 	# burst allowance absorbs jitter without permitting faster-than-real-time play.
-	p.move_credit = minf(12,p.move_credit+delta/FIXED_STEP)
+	p.move_credit = minf(INPUT_WINDOW,p.move_credit+delta/FIXED_STEP)
 	var steps = 0
 	while not p.frames.is_empty() and p.move_credit>=1 and steps<8:
 		var frame = p.frames.pop_front()
@@ -327,13 +340,16 @@ func simulate_remote(actor: Node, delta: float) -> void:
 		actor.rotation.y = frame[4]
 		actor.pitch = frame[6]
 		actor.camera.rotation.x = actor.pitch
+		actor.advance_weapon_state(FIXED_STEP)
 		actor.simulate_movement(FIXED_STEP,frame[1],frame[2],frame[3],false,-1,1 if frame[7] else 0)
 		# Acknowledge only AFTER the matching command has been simulated.
 		actor.last_input_sequence = frame[0]
+		_commands(p,actor)
 		p.move_credit -= 1
 		steps += 1
 	if steps==0 and Time.get_ticks_msec()-p.last_input>250:
 		actor.net_controls = {"move":Vector2.ZERO,"aim":false,"crouch":actor.crouched}
+		actor.advance_weapon_state(delta)
 		actor.simulate_movement(delta,Vector2.ZERO,false,actor.crouched)
 @rpc("any_peer","call_remote","reliable",0)
 func _command(number: int, life: int, action: String, value: int, yaw: float, pitch: float, input_seq: int, view_time: float) -> void:
@@ -345,7 +361,7 @@ func _command(number: int, life: int, action: String, value: int, yaw: float, pi
 	if number<=p.received_action or number>p.received_action+100 or not is_finite(yaw) or not is_finite(pitch) or not is_finite(view_time): return
 	p.received_action = number
 	if life!=actor.life_id or actor.health<=0 or p.commands.size()>=32 or p.budget<1: return
-	if action not in ["fire","reload","jump","equip","grenade","throw"]: return
+	if action not in ["fire","reload","jump","equip","grenade","throw","parry"]: return
 	if value<0 or value>3: return
 	p.budget -= 1
 	p.commands.append({"id":number,"life":life,"action":action,"value":value,"yaw":wrapf(yaw,-PI,PI),"pitch":clampf(pitch,-1.5,1.5),"time":game.clock,"sequence":clampi(input_seq,0,p.last_sequence+600),"view_time":bounded_shot_time(p,view_time)})
@@ -366,9 +382,10 @@ func _commands(p: Dictionary, actor: Node) -> void:
 		match cmd.action:
 			"jump": pass # Jump is carried in the numbered movement stream.
 			"fire":
-				actor.shot_view_time = maxf(game.clock-LagCompensation.MAX_REWIND,cmd.view_time)
+				actor.shot_view_time = cmd.view_time # Already bounded at receipt; preserve through server queue time.
 				actor.shoot()
 				actor.shot_view_time = -1.0
+			"parry": actor.start_parry()
 			"reload": actor.start_reload()
 			"equip": actor.equip(cmd.value)
 			"grenade": actor.equip_grenade("blast" if cmd.value==0 else "smoke")
@@ -418,7 +435,7 @@ func _physics_process(delta: float) -> void:
 func _row(slot: Dictionary) -> Array:
 	var a = slot.actor
 	var human = slot.peer>0
-	return [slot.index,a.position,a.velocity,a.rotation.y,a.pitch if human else 0.0,a.health,a.weapon if human else 0,a.crouched if human else false,a.life_id,a.reload_timer if human else a.reload_time]
+	return [slot.index,a.position,a.velocity,a.rotation.y,a.pitch if human else 0.0,a.health,a.weapon if human else 0,a.crouched if human else false,a.life_id,a.reload_timer if human else a.reload_time,a.parry_timer if human else 0.0]
 func board_rows(team: int) -> Array:
 	var result: Array = []
 	for s in slots:
@@ -447,7 +464,7 @@ func _send_snapshots() -> void:
 			continue
 		if not p.get("loaded",true) or not can_send(id): continue
 		var a = slots[p.slot].actor
-		var own = {"server_hz":server_tick_rate,"ack":a.last_input_sequence,"action":p.last_action,"ammo":a.ammo,"blast":a.blast_count,"smoke":a.smoke_count,"held":a.held_grenade,"ground":a.is_on_floor(),"jump_buffer":a.jump_buffer,"last_jump":a.last_jump_time,"xp":p.progress.xp_for("YOU"),"awards":p.progress.awards,"level_until":p.progress.level_up_until,"level":p.progress.recent_level,"round":round_info()}
+		var own = {"recovery":a.fire_cooldown if a.weapon==2 else 0.0,"radar":game.radar.contacts(actors(),a.team,game.clock),"server_hz":server_tick_rate,"ack":a.last_input_sequence,"action":p.last_action,"ammo":a.ammo,"blast":a.blast_count,"smoke":a.smoke_count,"held":a.held_grenade,"ground":a.is_on_floor(),"jump_buffer":a.jump_buffer,"last_jump":a.last_jump_time,"xp":p.progress.xp_for("YOU"),"awards":p.progress.awards,"level_until":p.progress.level_up_until,"level":p.progress.recent_level,"round":round_info()}
 		var payload = var_to_bytes([game.clock,states,board,own,game.combat.scores,projectiles,smokes]).compress(FileAccess.COMPRESSION_DEFLATE)
 		packet_serial += 1
 		largest_packet = maxi(largest_packet,payload.size())
@@ -464,6 +481,8 @@ func _snapshot(time: float, states: Array, board: Array, own: Dictionary, scores
 		snapshot_interval = lerpf(snapshot_interval,interval,.1)
 	snapshot_arrival = now
 	latest_server_time = time
+	game.radar.remote = own.get("radar",[])
+	game.radar.remote_at = Time.get_ticks_msec()
 	server_tick_rate = own.get("server_hz",60)
 	var transport = multiplayer.multiplayer_peer.get_peer(1)
 	ping_ms = int(transport.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME))
@@ -570,6 +589,7 @@ func _reconcile(row: Array, own: Dictionary) -> void:
 		if action[1]=="fire": pending_fire[action[2]] += 1
 	for index in range(4): a.ammo[index] = maxi(0,own.ammo[index]-pending_fire[index])
 	if actions.is_empty():
+		if a.weapon==2: a.fire_cooldown = maxf(a.fire_cooldown,own.get("recovery",0.0)-ping_ms/2000.0)
 		a.blast_count = own.blast
 		a.smoke_count = own.smoke
 		a.held_grenade = own.held
@@ -699,6 +719,7 @@ func fail(message: String) -> void:
 	status = message
 	stop()
 func stop() -> void:
+	game.radar.clear()
 	lag_comp.clear()
 	game.save_profile()
 	running = false

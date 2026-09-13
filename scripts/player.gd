@@ -38,6 +38,8 @@ var fire_cooldown = 0.0
 var equip_cooldown = 0.0
 var reload_timer = 0.0
 var visual_kick = 0.0
+var parry_timer = 0.0
+var parry_cooldown = 0.0
 var swing_timer = 0.0
 var swing_pending = false
 var fire_requested = false
@@ -99,9 +101,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not locally_controlled or not game.active or game.menu_open or health<=0:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		look_sway = (look_sway+event.relative*.00045).clamp(Vector2(-.04,-.04),Vector2(.04,.04))
-		rotate_y(-event.relative.x * sensitivity)
-		pitch = clampf(pitch - event.relative.y * sensitivity, -1.50, 1.50)
+		var mouse_motion = event.screen_relative if not event.screen_relative.is_zero_approx() else event.relative
+		look_sway = (look_sway+mouse_motion*.00045).clamp(Vector2(-.04,-.04),Vector2(.04,.04))
+		rotate_y(-mouse_motion.x * sensitivity * Rules.fov_sensitivity(camera.fov))
+		pitch = clampf(pitch - mouse_motion.y * sensitivity * Rules.fov_sensitivity(camera.fov), -1.50, 1.50)
 		camera.rotation.x = pitch
 	if event.is_action_pressed("jump"):
 		jump_requested = true
@@ -109,6 +112,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		fire_requested = true
 	if event.is_action_pressed("aim") and not held_grenade.is_empty():
 		short_toss_requested = true
+	if event.is_action_pressed("aim") and weapon==2 and held_grenade.is_empty():
+		start_parry()
 	if event.is_action_pressed("blast"):
 		blast_requested = true
 	if event.is_action_pressed("smoke"):
@@ -129,30 +134,9 @@ func _physics_process(delta: float) -> void:
 	if health<=0:
 		viewmodel.root.hide()
 		return
-	var old_cycle = sniper_cycle
-	sniper_cycle = maxf(0,sniper_cycle-delta)
-	if weapon==3 and reload_timer<=0:
-		if old_cycle>.88 and sniper_cycle<=.88:
-			play_sound("bolt_open",-9)
-			bolt_cues += 1
-		if old_cycle>.35 and sniper_cycle<=.35:
-			play_sound("bolt_close",-9)
-			bolt_cues += 1
-	fire_cooldown = maxf(0.0, fire_cooldown - delta)
-	equip_cooldown = maxf(0.0, equip_cooldown - delta)
-	throw_pose = maxf(0.0,throw_pose-delta)
-	visual_kick = move_toward(visual_kick, 0.0, delta * 4.0)
-	if reload_timer > 0.0:
-		var old_progress = 1.0 - reload_timer/float(Rules.WEAPONS[weapon]["reload"])
-		reload_timer = maxf(0.0, reload_timer - delta)
-		var progress = 1.0 - reload_timer/float(Rules.WEAPONS[weapon]["reload"])
-		for cue in [[.18,"mag_out"],[.70,"mag_in"],[.88,"slide"]]:
-			if old_progress < cue[0] and progress >= cue[0]:
-				play_sound(cue[1], -12.0)
-		if reload_timer == 0.0:
-			ammo[weapon] = Rules.WEAPONS[weapon]["mag"]
+	if locally_controlled or not (game.net.running and game.net.server):
+		advance_weapon_state(delta)
 	var aiming = is_aiming()
-	scope_age = scope_age + delta if aiming and weapon == 3 else 0.0
 	var move_input = movement_input()
 	movement_jump = jump_requested
 	if locally_controlled:
@@ -202,11 +186,47 @@ func _physics_process(delta: float) -> void:
 	camera.fov = move_toward(camera.fov,target_fov,450.0*delta)
 	viewmodel.update_pose(delta)
 
+func advance_weapon_state(delta: float) -> void:
+	parry_timer = maxf(0,parry_timer-delta)
+	parry_cooldown = maxf(0,parry_cooldown-delta)
+	var old_cycle = sniper_cycle
+	sniper_cycle = maxf(0,sniper_cycle-delta)
+	if weapon==3 and reload_timer<=0:
+		if old_cycle>.88 and sniper_cycle<=.88:
+			play_sound("bolt_open",-9)
+			bolt_cues += 1
+		if old_cycle>.35 and sniper_cycle<=.35:
+			play_sound("bolt_close",-9)
+			bolt_cues += 1
+	fire_cooldown = maxf(0.0, fire_cooldown - delta)
+	equip_cooldown = maxf(0.0, equip_cooldown - delta)
+	throw_pose = maxf(0.0,throw_pose-delta)
+	visual_kick = move_toward(visual_kick, 0.0, delta * 4.0)
+	if reload_timer > 0.0:
+		var old_progress = 1.0 - reload_timer/float(Rules.WEAPONS[weapon]["reload"])
+		reload_timer = maxf(0.0, reload_timer - delta)
+		var progress = 1.0 - reload_timer/float(Rules.WEAPONS[weapon]["reload"])
+		for cue in [[.18,"mag_out"],[.70,"mag_in"],[.88,"slide"]]:
+			if old_progress < cue[0] and progress >= cue[0]:
+				play_sound(cue[1], -12.0)
+		if reload_timer == 0.0:
+			ammo[weapon] = Rules.WEAPONS[weapon]["mag"]
+	var aiming = is_aiming()
+	scope_age = scope_age + delta if aiming and weapon == 3 else 0.0
+
+func start_parry() -> void:
+	if health<=0 or weapon!=2 or not held_grenade.is_empty() or parry_cooldown>0 or fire_cooldown>0 or equip_cooldown>0: return
+	network_action("parry")
+	parry_timer = .28
+	parry_cooldown = .75
+	play_sound("equip",-12)
+
 func equip(index: int) -> void:
 	if index == weapon and held_grenade.is_empty():
 		return
 	network_action("equip",index)
 	held_grenade = ""
+	parry_timer = 0.0
 	weapon = index
 	equip_cooldown = 0.22
 	reload_timer = 0.0
@@ -223,6 +243,7 @@ func equip_grenade(kind: String) -> void:
 		game.notify("OUT OF GRENADES", "Press F to refill practice supplies.")
 		return
 	network_action("grenade",1 if kind=="smoke" else 0)
+	parry_timer = 0.0
 	held_grenade = kind
 	reload_timer = 0.0
 	scope_age = 0.0
@@ -232,6 +253,7 @@ func equip_grenade(kind: String) -> void:
 	play_sound("equip", -19.0)
 
 func shoot() -> void:
+	if parry_timer>0: return
 	if health<=0 or not held_grenade.is_empty() or fire_cooldown > 0.0 or equip_cooldown > 0.0 or reload_timer > 0.0:
 		return
 	if weapon == 2:
@@ -335,6 +357,8 @@ func refill() -> void:
 	health = 100
 
 func reset_at(pos: Vector3) -> void:
+	parry_timer = 0.0
+	parry_cooldown = 0.0
 	correction_offset = Vector3.ZERO
 	net_controls = {"move":Vector2.ZERO,"aim":false,"crouch":false}
 	if not locally_controlled and game.net.peers.has(peer_id): game.net.peers[peer_id].frames.clear()
