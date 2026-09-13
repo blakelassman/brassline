@@ -32,7 +32,7 @@ func _ready() -> void:
 	var top = HBoxContainer.new()
 	shell.add_child(top)
 	label(top,"BRASSLINE",46,ink).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label(top,"MULTIPLAYER  /  0.7.1",15,gold)
+	label(top,"MULTIPLAYER  /  0.8.0",15,gold)
 	var columns = HBoxContainer.new()
 	columns.add_theme_constant_override("separation",32)
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -174,24 +174,66 @@ func _save_connection() -> void:
 	game.prefs.data.port = int(port.value)
 	game.save_profile()
 func _build_settings(page: VBoxContainer) -> void:
-	label(page,"MAKE IT FEEL RIGHT",28,ink)
-	label(page,"Changes apply immediately and stay saved on this PC.",15,muted)
-	_slider(page,"Mouse sensitivity","sensitivity",.0003,.012,.0001)
-	_slider(page,"Master volume","volume",0,1,.01)
-	label(page,"GRAPHICS PRESET",13,muted)
+	label(page,"SETTINGS",28,ink)
+	var scroll = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	page.add_child(scroll)
+	var rows = VBoxContainer.new()
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rows.add_theme_constant_override("separation",12)
+	scroll.add_child(rows)
+	_slider(rows,"Mouse sensitivity","sensitivity",.0003,.012,.0001)
+	label(rows,"Scope sensitivity automatically follows your field of view.",14,muted)
+	_slider(rows,"Master volume","volume",0,1,.01)
+	label(rows,"GRAPHICS",13,muted)
 	var quality = OptionButton.new()
-	for name in ["LOW  /  no shadows, minimal effects","BALANCED  /  no shadows, full effects","HIGH  /  shadows + 2x anti-aliasing"]: quality.add_item(name)
+	for name in ["LOW","BALANCED","HIGH / shadows + anti-aliasing"]: quality.add_item(name)
 	quality.selected = game.prefs.data.quality
 	quality.custom_minimum_size.y = 42
 	quality.item_selected.connect(func(index): game.prefs.data.quality = index; _settings_changed())
-	page.add_child(quality)
-	_slider(page,"Frame rate cap","fps_limit",30,240,1)
+	rows.add_child(quality)
+	_slider(rows,"Frame rate cap","fps_limit",30,240,1)
 	var fullscreen = CheckButton.new()
-	fullscreen.text = "Fullscreen"
+	fullscreen.text = "Fullscreen (borderless)"
 	fullscreen.button_pressed = game.prefs.data.fullscreen
-	fullscreen.toggled.connect(func(value): game.prefs.data.fullscreen = value; _settings_changed())
-	page.add_child(fullscreen)
-	label(page,"Crouch defaults to Ctrl or C. All controls can be rebound.",14,gold)
+	rows.add_child(fullscreen)
+	var presets = OptionButton.new()
+	for name in ["1280 × 720","1600 × 900","1920 × 1080","2560 × 1440","3840 × 2160","Custom"]: presets.add_item(name)
+	rows.add_child(presets)
+	var dimensions = HBoxContainer.new()
+	rows.add_child(dimensions)
+	var width = SpinBox.new()
+	var height = SpinBox.new()
+	width.min_value = 960
+	width.max_value = 7680
+	height.min_value = 540
+	height.max_value = 4320
+	width.value = game.prefs.data.resolution_width
+	height.value = game.prefs.data.resolution_height
+	for item in [width,height]:
+		item.custom_minimum_size = Vector2(165,38)
+		dimensions.add_child(item)
+	var sizes = [Vector2i(1280,720),Vector2i(1600,900),Vector2i(1920,1080),Vector2i(2560,1440),Vector2i(3840,2160)]
+	var selected = sizes.find(Vector2i(width.value,height.value))
+	presets.selected = selected if selected>=0 else 5
+	presets.item_selected.connect(func(index):
+		if index<5:
+			width.value = sizes[index].x
+			height.value = sizes[index].y)
+	var sync_preset = func(_value):
+		var found = sizes.find(Vector2i(width.value,height.value))
+		presets.selected = found if found>=0 else 5
+	width.value_changed.connect(sync_preset)
+	height.value_changed.connect(sync_preset)
+	button(rows,"APPLY DISPLAY",func():
+		game.prefs.data.fullscreen = fullscreen.button_pressed
+		game.prefs.data.resolution_width = int(width.value)
+		game.prefs.data.resolution_height = int(height.value)
+		game.apply_display_settings()
+		game.save_profile())
+	var hint = label(rows,"16:9 play area. Other shapes use black bars. Fullscreen uses your desktop size with the selected render resolution; oversized windows fit your screen.",14,muted)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 func _slider(page: Node, title: String, key: String, low: float, high: float, step: float) -> void:
 	var caption = label(page,title+"  "+str(game.prefs.data[key]),16,ink)
 	var slider = HSlider.new()

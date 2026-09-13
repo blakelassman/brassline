@@ -1,6 +1,7 @@
 extends RefCounted
 
 static var textures: Dictionary = {}
+static var bevel_meshes: Dictionary = {}
 static var normals: Dictionary = {}
 static var materials: Dictionary = {}
 
@@ -151,7 +152,7 @@ static func sign_text(parent: Node3D, pos: Vector3, text: String, size: int = 48
 
 static func beam(parent: Node3D, a: Vector3, b: Vector3, width: float, color: Color) -> Node3D:
 	var item = box(parent,(a+b)*.5,Vector3(width,width,a.distance_to(b)),color)
-	item.look_at(b,Vector3.FORWARD if absf((b-a).normalized().y)>.99 else Vector3.UP)
+	item.look_at(parent.to_global(b),Vector3.FORWARD if absf((b-a).normalized().y)>.99 else Vector3.UP)
 	return item
 
 static func crate(parent: Node3D, pos: Vector3, size: Vector3, color: Color) -> Node3D:
@@ -172,6 +173,7 @@ static func polygon(st: SurfaceTool, vertices: Array, normal: Vector3) -> void:
 			st.add_vertex(v)
 
 static func beveled_box(size: Vector3) -> ArrayMesh:
+	if bevel_meshes.has(size): return bevel_meshes[size]
 	var h = size*.5
 	var b = minf(.018,minf(h.x,minf(h.y,h.z))*.24)
 	var st = SurfaceTool.new()
@@ -216,4 +218,7 @@ static func beveled_box(size: Vector3) -> ArrayMesh:
 					point[axis] = h[axis]*sign[axis]
 					points.append(point)
 				polygon(st,points,sign.normalized())
-	return st.commit()
+	st.index()
+	var mesh = st.commit()
+	bevel_meshes[size] = mesh
+	return mesh

@@ -65,7 +65,7 @@ func host_lag() -> void:
 	check(game.net.bounded_shot_time({},game.clock+20)==game.clock,"Future shot timestamps are clamped to server time")
 	check(game.net.bounded_shot_time({},game.clock-20)>=game.clock-.181,"Unverified clients cannot request arbitrary historical times")
 	for tick in range(120): lag.record(rows,101+tick/60.0)
-	check(lag.history[0].size()<=48,"History memory remains bounded")
+	check(lag.history[0].size()<=72,"History memory remains bounded")
 	# The regular combat path still lets walls and teammates stop rewound bullets.
 	actor.set_physics_process(false)
 	actor.reset_at(Vector3(0,30,10))
@@ -96,6 +96,8 @@ func client_lag() -> void:
 	await wait_for(func(): return marked("host"))
 	game.net.join("127.0.0.1",join_port,"test-only")
 	check(await wait_for(func(): return game.net.is_client_ready()),"Lag compensation client joins")
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--client-fps="): Engine.max_fps = arg.trim_prefix("--client-fps=").to_int()
 	platform()
 	await wait_for(func(): return marked("target_ready"))
 	await get_tree().create_timer(1.2).timeout
@@ -109,6 +111,7 @@ func client_lag() -> void:
 	game.player.pitch = asin(direction.y)
 	game.player.camera.rotation = Vector3(game.player.pitch,0,0)
 	var shots = game.shot_count
+	print("AIM_METRICS target=",target.position," origin=",game.player.camera.global_position," scope=",game.player.scope_age," spread=",game.player.current_spread()," view=",game.net.presentation_time," latest=",game.net.latest_server_time)
 	game.player.shoot()
 	check(game.shot_count==shots+1,"Moving-target shot draws immediately on the client")
 	check(await wait_for(func(): return game.kills==1,10),"No manual lead: the target under the crosshair is killed")

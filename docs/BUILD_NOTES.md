@@ -1,3 +1,10 @@
+# Current build: 0.8.0
+
+Read [UPDATE_0_8.md](UPDATE_0_8.md) for current behavior and verification.
+The notes below are historical records of earlier prototypes.
+
+---
+
 # BRASSLINE 0.7.1 - client responsiveness and lag compensation
 
 Everyone must update. Wire protocol 8 rejects the previous protocol 7. The

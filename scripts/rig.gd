@@ -1,19 +1,48 @@
 extends RefCounted
 ## Articulated armor rig. Cosmetic motion stays within the fixed competitive hitboxes.
+static var armor_meshes: Dictionary = {}
 const Geo = preload("res://scripts/geo.gd")
 static func joint(parent: Node3D, at: Vector3) -> Node3D:
 	var node = Node3D.new()
 	parent.add_child(node)
 	node.position = at
 	return node
+static func armor(parent: Node3D, at: Vector3, size: Vector3, color: Color) -> Node3D:
+	var root = joint(parent,at)
+	if armor_meshes.has(size):
+		var cached = MeshInstance3D.new()
+		cached.mesh = armor_meshes[size]
+		cached.material_override = Geo.material(color)
+		root.add_child(cached)
+		return root
+	# Eight-sided tapered shell: a chest/limb shape, with chamfered corners.
+	var ring = [Vector2(-.34,-.5),Vector2(.34,-.5),Vector2(.5,-.3),Vector2(.5,.3),Vector2(.34,.5),Vector2(-.34,.5),Vector2(-.5,.3),Vector2(-.5,-.3)]
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(8):
+		var a = ring[i]
+		var b = ring[(i+1)%8]
+		var top_a = Vector3(a.x*size.x,size.y*.5,a.y*size.z)
+		var top_b = Vector3(b.x*size.x,size.y*.5,b.y*size.z)
+		var low_a = Vector3(a.x*size.x*.78,-size.y*.5,a.y*size.z*.9)
+		var low_b = Vector3(b.x*size.x*.78,-size.y*.5,b.y*size.z*.9)
+		for v in [top_a,low_b,low_a,top_a,top_b,low_b,Vector3(0,size.y*.5,0),top_b,top_a,Vector3(0,-size.y*.5,0),low_a,low_b]: st.add_vertex(v)
+	st.generate_normals()
+	var mesh = MeshInstance3D.new()
+	mesh.mesh = st.commit()
+	armor_meshes[size] = mesh.mesh
+	mesh.material_override = Geo.material(color)
+	root.add_child(mesh)
+	return root
+
 static func build(parent: Node3D, color: Color, variant: int) -> Dictionary:
 	var root = joint(parent,Vector3.ZERO)
 	var dark = Color("253b49")
 	var light = color.lightened(.22)
 	var pelvis = Geo.box(root,Vector3(0,.68,0),Vector3(.46,.19,.30),dark,false,"rubber")
 	var torso = joint(root,Vector3(0,1.06,0))
-	Geo.box(torso,Vector3.ZERO,Vector3(.56,.59,.32),dark,false,"rubber")
-	Geo.box(torso,Vector3(0,.045,.14),Vector3(.57,.43,.10),color,false,"panel")
+	armor(torso,Vector3.ZERO,Vector3(.56,.59,.32),dark)
+	armor(torso,Vector3(0,.045,.14),Vector3(.57,.43,.12),color)
 	Geo.box(torso,Vector3(0,.10,.205),Vector3(.35,.09,.035),light)
 	for x in [-.16,.16]:
 		Geo.box(torso,Vector3(x,-.18,.17),Vector3(.13,.16,.1),Color("b3a57f"),false,"rubber")
@@ -32,27 +61,35 @@ static func build(parent: Node3D, color: Color, variant: int) -> Dictionary:
 	else:
 		Geo.box(torso,Vector3(0,.05,-.25),Vector3(.44,.55,.26),color,false,"panel")
 		Geo.box(head,Vector3(-.2,.05,.16),Vector3(.1,.12,.15),Color("d6bb77"))
+	# Helmet ear cups, collar, armored shoulders and textile seams.
+	for side in [-1,1]:
+		var ear = Geo.cylinder(head,Vector3(side*.215,0,0),.085,.045,dark)
+		ear.rotation.z = PI/2
+		Geo.box(torso,Vector3(side*.23,.05,.21),Vector3(.045,.34,.025),light)
+		armor(root,Vector3(side*.4,1.32,0),Vector3(.28,.17,.29),color)
+	Geo.cylinder(root,Vector3(0,1.40,0),.18,.08,light)
 	var legs: Array = []
 	var knees: Array = []
 	var arms: Array = []
 	var elbows: Array = []
 	for side in [-1,1]:
 		var leg = joint(root,Vector3(side*.18,.67,0))
-		Geo.box(leg,Vector3(0,-.14,0),Vector3(.20,.30,.24),dark,false,"rubber")
+		armor(leg,Vector3(0,-.14,0),Vector3(.23,.30,.26),dark)
 		var knee = joint(leg,Vector3(0,-.30,0))
 		Geo.box(knee,Vector3(0,-.07,.11),Vector3(.18,.18,.08),color)
-		Geo.box(knee,Vector3(0,-.14,0),Vector3(.17,.29,.20),dark,false,"rubber")
+		armor(knee,Vector3(0,-.14,0),Vector3(.19,.29,.23),dark)
 		Geo.box(knee,Vector3(0,-.28,.06),Vector3(.22,.14,.34),Color("182e3a"),false,"rubber")
 		legs.append(leg)
 		knees.append(knee)
 		var arm = joint(root,Vector3(side*.39,1.29,0))
 		Geo.sphere(arm,Vector3.ZERO,.145,color)
-		Geo.box(arm,Vector3(0,-.13,0),Vector3(.18,.26,.20),color if variant!=1 else dark)
+		armor(arm,Vector3(0,-.13,0),Vector3(.20,.26,.22),color if variant!=1 else dark)
 		var elbow = joint(arm,Vector3(0,-.27,0))
-		Geo.box(elbow,Vector3(0,-.12,0),Vector3(.16,.25,.18),dark,false,"rubber")
+		armor(elbow,Vector3(0,-.12,0),Vector3(.18,.25,.20),dark)
 		Geo.box(elbow,Vector3(0,-.27,.015),Vector3(.15,.13,.18),Color("78928f"),false,"rubber")
 		arms.append(arm)
 		elbows.append(elbow)
+	Geo.finish_weapon(root)
 	return {"root":root,"torso":torso,"head":head,"pelvis":pelvis,"legs":legs,"knees":knees,"arms":arms,"elbows":elbows}
 
 static func animate(rig: Dictionary, speed: float, clock: float, hit: float, reload: float, shot: float, armed: bool) -> void:

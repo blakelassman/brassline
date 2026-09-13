@@ -18,6 +18,15 @@ func sync_physics() -> void:
 	await get_tree().process_frame
 
 func run(game: Node) -> void:
+	# Isolated firing lane: combat rules must not depend on a production map layout.
+	game.world_root.free()
+	game.world_root = Node3D.new()
+	game.add_child(game.world_root)
+	game.Geo.box(game.world_root,Vector3(0,-.3,0),Vector3(64,.6,62),Color.GRAY,true)
+	game.Geo.box(game.world_root,Vector3(-6,1.5,-4.5),Vector3(4,3,.6),Color.GRAY,true)
+	game.targets[0].anchor = Vector3(-6,.04,-8)
+	game.targets[0].reset()
+
 	check(Rules.blast_damage(0.5,1,1,true) == 0, "Owner takes no blast damage")
 	check(Rules.blast_damage(0.5,1,1,false) == 0, "Teammate takes no blast damage")
 	check(Rules.blast_damage(0.5,1,2,false) > 0, "Enemy takes blast damage")

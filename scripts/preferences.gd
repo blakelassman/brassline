@@ -2,8 +2,8 @@ extends RefCounted
 ## One local profile, atomically saved with backup. Tests can use an isolated path.
 const PATH = "user://profile_v1.json"
 const DEFAULT_KEYS = {"forward":[KEY_W],"back":[KEY_S],"left":[KEY_A],"right":[KEY_D],"jump":[KEY_SPACE,-MOUSE_BUTTON_WHEEL_DOWN],"crouch":[KEY_CTRL,KEY_C],"fire":[-MOUSE_BUTTON_LEFT],"aim":[-MOUSE_BUTTON_RIGHT],"weapon_0":[KEY_1],"weapon_1":[KEY_2],"weapon_2":[KEY_3],"weapon_3":[KEY_4],"reload":[KEY_R],"blast":[KEY_G],"smoke":[KEY_Q],"refill":[KEY_F],"reset":[KEY_T],"scoreboard":[KEY_TAB],"help":[KEY_H],"pause":[KEY_ESCAPE]}
-const LABELS = {"forward":"Move forward","back":"Move backward","left":"Strafe left","right":"Strafe right","jump":"Jump","crouch":"Crouch (hold)","fire":"Fire / slash / throw","aim":"Aim / scope / short toss","weapon_0":"Rifle","weapon_1":"Heavy pistol","weapon_2":"Sword","weapon_3":"Sniper","reload":"Reload","blast":"Equip blast grenade","smoke":"Equip smoke grenade","refill":"Refill training supplies","reset":"Reset training drill","scoreboard":"Scoreboard (hold)","help":"Toggle tips","pause":"Open / close menu"}
-var data: Dictionary = {"version":1,"name":"Player","id":"","xp":0,"sensitivity":.0023,"volume":.65,"quality":1,"fps_limit":120,"fullscreen":false,"bindings":{},"last_address":"","port":27020}
+const LABELS = {"forward":"Move forward","back":"Move backward","left":"Strafe left","right":"Strafe right","jump":"Jump","crouch":"Crouch (hold)","fire":"Fire / slash / throw","aim":"Aim / scope / parry / short toss","weapon_0":"Rifle","weapon_1":"Heavy pistol","weapon_2":"Sword","weapon_3":"Sniper","reload":"Reload","blast":"Equip blast grenade","smoke":"Equip smoke grenade","refill":"Refill training supplies","reset":"Reset training drill","scoreboard":"Scoreboard (hold)","help":"Toggle tips","pause":"Open / close menu"}
+var data: Dictionary = {"version":1,"name":"Player","id":"","xp":0,"sensitivity":.0023,"volume":.65,"quality":1,"fps_limit":120,"fullscreen":false,"resolution_width":1920,"resolution_height":1080,"bindings":{},"last_address":"","port":27020}
 var path = PATH
 var error = ""
 var dirty = false
@@ -20,7 +20,7 @@ func load_profile() -> void:
 		for key in data:
 			if parsed.has(key) and typeof(parsed[key])==typeof(data[key]): data[key] = parsed[key]
 		# JSON stores all numbers as floats; explicitly validate and clamp numeric fields.
-		for key in ["xp","quality","fps_limit","port","sensitivity","volume"]:
+		for key in ["xp","quality","fps_limit","port","sensitivity","volume","resolution_width","resolution_height"]:
 			if parsed.get(key) is float or parsed.get(key) is int:
 				if is_finite(float(parsed[key])): data[key] = parsed[key]
 		break
@@ -30,6 +30,8 @@ func load_profile() -> void:
 	data.port = clampi(int(data.port),1024,65535)
 	data.sensitivity = clampf(float(data.sensitivity),.0003,.012)
 	data.volume = clampf(float(data.volume),0,1)
+	data.resolution_width = clampi(int(data.resolution_width),960,7680)
+	data.resolution_height = clampi(int(data.resolution_height),540,4320)
 	data.name = clean_name(data.name)
 	if data.id.length()!=32: data.id = Crypto.new().generate_random_bytes(16).hex_encode()
 	var valid: Dictionary = {}

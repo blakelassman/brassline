@@ -29,7 +29,7 @@ func _ready() -> void:
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(container)
 	viewport = SubViewport.new()
-	viewport.size = Vector2i(1280, 800)
+	viewport.size = Vector2i(1280, 720)
 	viewport.transparent_bg = true
 	viewport.msaa_3d = Viewport.MSAA_2X
 	viewport.own_world_3d = true
@@ -109,6 +109,7 @@ func _ready() -> void:
 			Geo.box(mag,Vector3.ZERO,Vector3(.1,.17,.14),dark)
 			Geo.box(bolt,Vector3(.115,.015,.08),Vector3(.12,.045,.04),gold)
 			Geo.sphere(bolt,Vector3(.19,.015,.08),.034,dark)
+		preload("res://scripts/weapon_art.gd").detail(model,index)
 		mag_origins.append(mag.position)
 		make_hand(model,Vector3(.025,-.18,.28))
 		var hand = make_hand(model,Vector3(-.035,-.13,-.22))
@@ -138,6 +139,7 @@ func _ready() -> void:
 		flashes.append(flash)
 		for part in model.get_children():
 			if part!=flash: Geo.finish_weapon(part)
+		preload("res://scripts/optimizer.gd").batch(model,[mag,bolt,hand,flash])
 	grenade_model = Node3D.new()
 	root.add_child(grenade_model)
 	grenade_shell = Geo.sphere(grenade_model,Vector3(0,0,.02),.12,gold)
@@ -204,6 +206,10 @@ func update_pose(delta: float) -> void:
 		root.rotation.z = -.075*motion
 		root.position.y -= .035*motion
 		support_hands[3].position = Vector3(.08,-.05,.04)+Vector3(0,0,.14*motion)
+	if player.parry_timer > 0:
+		var guard = smoothstep(0,.06,player.parry_timer)
+		root.rotation += Vector3(.12,.4,1.1)*guard
+		root.position += Vector3(-.26,.17,.12)*guard
 	if player.swing_timer > 0:
 		var slash = sin(PI*clampf((.5-player.swing_timer)/.38,0,1))
 		root.rotation += Vector3(-.18*slash,-.5*slash,-1.2*slash)

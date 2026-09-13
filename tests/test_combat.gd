@@ -71,8 +71,8 @@ func run(game: Node) -> void:
 	var spawn = c.choose_spawn(1,p)
 	check(spawn.distance_to(Vector3(-17,.05,16))>20,"Spawn selection avoids a crowded enemy-controlled corner")
 	var bot = c.bots[4]
-	bot.position=Vector3(-6,.05,-7)
-	p.reset_at(Vector3(-6,.05,-1))
+	bot.position=Vector3(-18.2,.05,-14)
+	p.reset_at(Vector3(-18.2,.05,-10))
 	await frames(3)
 	check(not c.sight_clear(bot.position+Vector3.UP,p.position+Vector3.UP),"Bots cannot see through solid cover")
 	bot.position=Vector3(3,.05,0)

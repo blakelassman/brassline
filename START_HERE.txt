@@ -1,24 +1,22 @@
-BRASSLINE 0.7.1 - RESPONSIVENESS UPDATE
+BRASSLINE 0.8.0 - DISTRICTS & COMBAT UPDATE
 
 EVERYONE MUST UPDATE: this build uses a new network protocol.
-Extract into a fresh folder; keep using UDP 27020 and your existing port rule.
+Update the source checkout or extract a complete package. Keep UDP 27020 and your existing port rule.
 Your saved level and settings carry over automatically on the same Windows user.
 
 WHAT CHANGED
-- Fixed the server corrections that repeatedly pulled joining players backward.
-- Jump, crouch, movement, firing visuals, reload and grenade throws respond locally.
-- Moving-target hit detection compensates for the position shown on your screen.
-- Smoother remote movement and grenade visuals under jitter and packet loss.
-- Online HUD shows ping, your FPS, and the server's simulation rate.
+- FOV-scaled scope sensitivity; a small amount of counter-strafe momentum.
+- Settings: fullscreen, resolution presets and custom width/height. Apply Display.
+- Clean HUD. Hold Tab for K/D, levels, ping and FPS.
+- Minimap: teammates always; enemies at their last shot position for two seconds.
+- Four rebuilt districts with upstairs interiors, smooth stairs and boost roofs.
+- Better armor and weapon silhouettes. Sword: left attack, right timed parry.
 
+GIT SOURCE CHECKOUT
+Keep your existing engine folder beside project.godot, then run START_BRASSLINE.bat.
+Engine binaries are excluded from Git. An existing engine folder survives updates.
+Your friends need the same 0.8.0 source and engine folder, or a full portable package.
 
-
-1. Extract the entire ZIP into a NEW folder.
-2. Open Brassline_Prototype_0_7_1.
-3. Double-click START_BRASSLINE.bat.
-
-The Windows 64-bit Godot engine is included. No installation or purchase needed.
-Your friends need this same 0.7.1 ZIP.
 
 PLAY
 - AIM TRAINING: the original passive targets and movement practice.

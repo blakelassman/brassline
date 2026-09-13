@@ -102,24 +102,14 @@ func _draw() -> void:
 	var scoped = p.weapon == 3 and p.scope_age >= Rules.SCOPE_READY and p.held_grenade.is_empty()
 	if scoped:
 		_draw_scope()
-	draw_rect(Rect2(24,22,300,65),Color(0.06,0.15,0.19,0.9))
-	text_at("BRASSLINE",Vector2(40,49),23,ink)
-	text_at(game.Maps.NAMES[game.current_map]+(" / 5v5" if game.mode in ["combat","online"] else " / TRAINING"),Vector2(40,71),12,dim)
-	draw_rect(Rect2(w-235,22,210,65),Color(0.06,0.15,0.19,0.9))
+	_draw_minimap()
 	if game.mode in ["combat","online"]:
-		text_at("BLUE %d / RED %d" % [game.combat.scores[1],game.combat.scores[2]],Vector2(w-217,48),18,ink)
-		text_at("YOU  %d KILLS / %d DEATHS" % [game.kills,game.combat.deaths],Vector2(w-217,71),12,gold)
-	else:
-		text_at("%02d  TARGETS" % game.kills,Vector2(w-217,48),20,ink)
-		text_at("%02d AIR HEADS   /   %02d BOOSTS" % [game.air_heads,game.perfect_boosts],Vector2(w-217,71),12,gold)
+		centered("%d   :   %d" % [game.combat.scores[1],game.combat.scores[2]],42,26,ink)
 	if game.net.running:
 		var seconds = maxi(0,ceili(game.net.round_end-game.clock)) if game.net.round_active else 0
-		centered("%02d:%02d   /   FIRST TO 250   /   %s TEAM" % [seconds/60,seconds%60,"BLUE" if p.team==1 else "RED"],44,16,gold)
-	if game.net.is_client_ready():
-		var stale = (Time.get_ticks_msec()-game.net.last_packet)/1000.0
-		var connection = "%d ms PING  /  %d FPS  /  SERVER %d Hz" % [game.net.ping_ms,Engine.get_frames_per_second(),int(game.net.server_tick_rate)]
-		if stale>.5: connection = "CONNECTION INTERRUPTED  /  %.1fs SINCE UPDATE" % stale
-		text_at(connection,Vector2(40,105),12,gold if stale>.5 or game.net.ping_ms>150 else dim)
+		centered("%02d:%02d" % [seconds/60,seconds%60],65,14,dim)
+	if game.net.is_client_ready() and Time.get_ticks_msec()-game.net.last_packet>750:
+		centered("CONNECTION INTERRUPTED",92,14,gold)
 	var center = size / 2.0
 	var aim_color = gold if p.weapon == 1 else ink
 	if not scoped and p.health>0:
@@ -132,55 +122,32 @@ func _draw() -> void:
 		var hit_color = gold if game.last_head else Color.WHITE
 		for dir in [Vector2(-1,-1),Vector2(1,-1),Vector2(-1,1),Vector2(1,1)]:
 			draw_line(center+dir*14,center+dir*21,hit_color,2)
-	draw_rect(Rect2(24,h-96,300,70),Color(0.06,0.15,0.19,0.94))
-	text_at(str(p.health),Vector2(40,h-56),31,Color("ff9275") if p.health<40 else ink)
-	text_at("HEALTH",Vector2(105,h-58),12,dim)
-	text_at("G  BLAST  %d     Q  SMOKE  %d" % [p.blast_count,p.smoke_count],Vector2(40,h-39),13,gold)
-	draw_rect(Rect2(w-280,h-96,255,70),Color(0.06,0.15,0.19,0.94))
-	text_at(p.held_grenade.to_upper()+" GRENADE" if not p.held_grenade.is_empty() else Rules.WEAPONS[p.weapon]["name"],Vector2(w-260,h-67),14,gold)
-	var ammo_text = "%02d / %02d" % [p.ammo[p.weapon],Rules.WEAPONS[p.weapon]["mag"]] if p.weapon != 2 else "CLOSE RANGE"
-	if not p.held_grenade.is_empty():
-		ammo_text = "L THROW / R DROP"
-	text_at(ammo_text,Vector2(w-260,h-39),19 if not p.held_grenade.is_empty() else 26,ink)
-	if p.reload_timer > 0:
-		draw_rect(Rect2(w/2-100,h-130,200,45),Color(.06,.15,.19,.92))
-		centered("RELOADING",h-108,16,gold)
-		draw_rect(Rect2(w/2-80,h-97,160,3),Color(.1,.2,.24,.9))
-		draw_rect(Rect2(w/2-80,h-97,160*(1-p.reload_timer/float(Rules.WEAPONS[p.weapon]["reload"])),3),gold)
-	draw_rect(Rect2(w/2-218,h-63,436,37),Color(0.06,0.15,0.19,0.94))
-	centered("1 RIFLE    2 PISTOL    3 SWORD    4 SNIPER",h-39,14,ink)
+	text_at(str(p.health),Vector2(28,h-40),32,Color("ff9275") if p.health<40 else ink)
+	draw_rect(Rect2(28,h-28,120,3),Color(.15,.2,.23,.8))
+	draw_rect(Rect2(28,h-28,1.2*p.health,3),ink)
+	for i in range(2):
+		var at = Vector2(180+i*48,h-44)
+		draw_circle(at,6,gold if i==0 else dim)
+		text_at(str(p.blast_count if i==0 else p.smoke_count),at+Vector2(12,5),15,ink)
+	text_at(p.held_grenade.to_upper() if not p.held_grenade.is_empty() else Rules.WEAPONS[p.weapon].name,Vector2(w-225,h-70),13,gold)
+	var ammo_text = "%02d / %02d" % [p.ammo[p.weapon],Rules.WEAPONS[p.weapon].mag] if p.weapon!=2 else ""
+	text_at(ammo_text,Vector2(w-225,h-36),30,ink)
+	if p.reload_timer>0:
+		draw_rect(Rect2(w-225,h-24,180*(1-p.reload_timer/float(Rules.WEAPONS[p.weapon].reload)),3),gold)
+	if p.weapon==2 and p.parry_timer>0:
+		draw_arc(center,29,-PI*.8,-PI*.2,20,gold,3,true)
 	if help_visible:
-		draw_rect(Rect2(24,110,335,133),Color(0.06,0.15,0.19,0.86))
-		if game.mode in ["combat","online"]:
-			text_at("ENDLESS 5v5",Vector2(40,138),17,gold)
-			text_at("Teal allies. Orange enemies. No score limit.",Vector2(40,163),14,ink)
-			text_at("Instant respawns. No spawn protection.",Vector2(40,185),14,ink)
-			text_at("Smoke blocks bot vision. Cover stops shots.",Vector2(40,207),14,ink)
-			text_at("Esc pause / switch arenas   /   H hide tips",Vector2(40,230),12,dim)
-		else:
-			text_at("THE BOOST SHOT",Vector2(40,138),17,gold)
-			text_at("G equips the grenade. Right-click drops it.",Vector2(40,163),14,ink)
-			text_at("Jump just before the burst.",Vector2(40,185),14,ink)
-			text_at("2 for the pistol. Shoot above the wall.",Vector2(40,207),14,ink)
-			text_at("F refill   /   T reset   /   H hide tips",Vector2(40,230),12,dim)
+		centered("Move / jump / crouch • Fire to attack • Aim to scope, parry or toss • Rebind in Settings",h-120,14,dim)
 	_draw_feed()
 	var fuse = -1.0
 	for grenade in game.grenades:
-		if is_instance_valid(grenade) and grenade.kind == "blast":
+		if is_instance_valid(grenade) and grenade.kind == "blast" and grenade.global_position.distance_to(p.global_position)<=Rules.BLAST_RADIUS:
 			fuse = grenade.fuse if fuse < 0 else minf(fuse,grenade.fuse)
 	if fuse >= 0:
 		var y = h-159
 		draw_rect(Rect2(w/2-150,y,300,8),Color(0.07,0.16,0.19,0.94))
 		draw_rect(Rect2(w/2-150,y,300*clampf(fuse/Rules.FUSE,0,1),8),gold)
-		centered("JUMP NOW" if fuse <= Rules.PERFECT_WINDOW else "BLAST  %.2f s" % fuse,y-12,21,gold)
-	elif p.max_height > 0.2:
-		centered("LAST BOOST  %.1f m" % p.max_height,h-132,16,gold)
-	if game.toast_time > 0:
-		draw_rect(Rect2(w/2-240,96,480,69),Color(.06,.15,.19,.87))
-		centered(game.toast_title,126,27,gold)
-		centered(game.toast_detail,152,15,ink)
-	draw_rect(Rect2(w-116,h-132,91,26),Color(0.06,0.15,0.19,0.94))
-	text_at("ESC  MENU",Vector2(w-107,h-113),11,ink)
+		if fuse <= Rules.PERFECT_WINDOW: centered("JUMP",y-10,16,gold)
 	if game.mode in ["combat","online"]:
 		if p.hurt_flash>0:
 			draw_rect(Rect2(Vector2.ZERO,size),Color(.8,.10,.04,p.hurt_flash*.35))
@@ -212,7 +179,7 @@ func _draw_feed() -> void:
 		var opacity = clampf(7.0-(game.clock-entry.time),0,1)
 		if entry.evicted >= 0:
 			opacity *= clampf(1.0-(game.clock-entry.evicted)/.45,0,1)
-		var y = size.y-365+i*29
+		var y = size.y-240+i*29
 		draw_rect(Rect2(x,y,360,25),Color(.045,.11,.14,.86*opacity))
 		draw_rect(Rect2(x,y,3,25),Color(Color("71d3df") if entry.get("team",1)==1 else Color("ff9772"),opacity))
 		if entry.get("killer","")=="YOU": draw_rect(Rect2(x,y,360,25),Color(gold,opacity),false,1.5)
@@ -220,11 +187,6 @@ func _draw_feed() -> void:
 		Icons.draw_icon(self,Vector2(x+111,y+1),"HEADSHOT" if entry.head else entry.weapon,Color(gold if entry.head else ink,opacity))
 		text_at(entry.victim,Vector2(x+181,y+17),12,Color(ink,opacity))
 		if entry.collateral: text_at("COLL",Vector2(x+316,y+17),10,Color(gold,opacity))
-	var p = game.player
-	var speed = Vector2(p.velocity.x,p.velocity.z).length()
-	draw_rect(Rect2(24,size.y-137,210,29),Color(.06,.15,.19,.9))
-	text_at("%.1f m/s  /  %s" % [speed,"AIR" if not p.is_on_floor() else ("READY" if p.current_spread()<.05 else "MOVING")],Vector2(40,size.y-117),13,gold)
-
 func award_text(value: String, y: float, font_size: int, color: Color) -> void:
 	var width = font.get_string_size(value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
 	var at = Vector2((size.x-width)*.5,y)
@@ -233,14 +195,6 @@ func award_text(value: String, y: float, font_size: int, color: Color) -> void:
 
 func _draw_xp() -> void:
 	var p = game.progression
-	var level = p.level_for("YOU")
-	var earned = p.xp_for("YOU")-p.threshold(level)
-	var needed = p.threshold(mini(1000,level+1))-p.threshold(level)
-	var fraction = float(earned)/maxf(1,needed) if level<1000 else 1.0
-	draw_rect(Rect2(24,size.y-180,245,34),Color(.06,.15,.19,.92))
-	text_at("LV %d  /  TAB SCOREBOARD" % level,Vector2(36,size.y-164),12,gold)
-	draw_rect(Rect2(36,size.y-157,221,3),Color(.25,.35,.38))
-	draw_rect(Rect2(36,size.y-157,221*fraction,3),gold)
 	if not p.awards.is_empty():
 		var award = p.awards[0]
 		var fade = clampf((p.display_until(award)-game.clock)/.3,0,1)
@@ -265,7 +219,7 @@ func _draw_scoreboard() -> void:
 	draw_rect(Rect2(x,y,840,604),Color("132b34"))
 	draw_rect(Rect2(x,y,840,3),gold)
 	text_at("SCOREBOARD",Vector2(x+28,y+40),27,ink)
-	text_at("ENDLESS 5v5" if game.mode in ["combat","online"] else "AIM TRAINING",Vector2(x+565,y+38),17,gold)
+	text_at("TDM / FIRST TO 250" if game.mode=="online" else ("ENDLESS 5v5" if game.mode=="combat" else "AIM TRAINING"),Vector2(x+565,y+38),17,gold)
 	for col in [["PLAYER",40],["LEVEL",378],["KILLS",493],["DEATHS",587],["TOTAL XP",683]]:
 		text_at(col[0],Vector2(x+col[1],y+77),12,dim)
 	for team in [1,2]:
@@ -288,4 +242,31 @@ func _draw_scoreboard() -> void:
 	var fraction = float(earned)/maxf(1,needed) if level<1000 else 1.0
 	draw_rect(Rect2(x+28,y+553,784,4),Color(.25,.35,.38))
 	draw_rect(Rect2(x+28,y+553,784*fraction,4),gold)
-	text_at("Your level is saved. Release your scoreboard key to return. Combat continues.",Vector2(x+28,y+582),13,dim)
+	text_at("%d FPS   /   %d ms   /   %d Hz server" % [Engine.get_frames_per_second(),game.net.ping_ms,int(game.net.server_tick_rate)],Vector2(x+28,y+582),13,dim)
+
+func radar_point(position: Vector3) -> Vector2:
+	return Vector2(130,130)+Vector2(position.x,position.z)*3.05
+func _draw_minimap() -> void:
+	draw_rect(Rect2(24,24,212,212),Color(.035,.075,.095,.9))
+	draw_rect(Rect2(116,34,28,192),Color(.13,.19,.21,.85))
+	for rect in game.Maps.footprints(game.current_map):
+		draw_rect(Rect2(Vector2(130,130)+rect.position*3.05,rect.size*3.05),Color(.27,.36,.38,.8))
+	draw_rect(Rect2(24,24,212,212),Color(.65,.74,.74,.5),false,1)
+	text_at("N",Vector2(125,40),11,dim)
+	var actors = game.net.actors() if game.net.running else game.targets.duplicate()
+	if not game.net.running: actors.append(game.player)
+	var contacts = game.radar.remote if game.net.is_client_ready() else game.radar.contacts(actors,game.player.team,game.clock)
+	for contact in contacts:
+		var at = radar_point(contact[0]).clamp(Vector2(30,30),Vector2(230,230))
+		var age = (Time.get_ticks_msec()-game.radar.remote_at)/1000.0 if game.net.is_client_ready() else 0.0
+		var alpha = 1.0 if contact[1] else clampf((contact[2]-age)/.5,0,1)
+		if alpha<=0: continue
+		draw_circle(at,3.5,Color(Color("71d3df") if contact[1] else Color("ff775c"),alpha))
+		if absf(contact[0].y-game.player.position.y)>2:
+			var sign_y = -1 if contact[0].y>game.player.position.y else 1
+			draw_line(at+Vector2(-2,sign_y*6),at+Vector2(0,sign_y*8),ink,1)
+			draw_line(at+Vector2(0,sign_y*8),at+Vector2(2,sign_y*6),ink,1)
+	var at = radar_point(game.player.position).clamp(Vector2(31,31),Vector2(229,229))
+	var arrow = PackedVector2Array()
+	for point in [Vector2(0,-7),Vector2(-5,5),Vector2(0,2),Vector2(5,5)]: arrow.append(at+point.rotated(-game.player.rotation.y))
+	draw_colored_polygon(arrow,gold)

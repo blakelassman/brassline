@@ -47,17 +47,17 @@ func host_test() -> void:
 	check(p.slot==5 and remote.team==2 and game.combat.bots.size()==8,"First friend joins opposing team: 1v1 humans, 4v4 bots")
 	game.player.set_physics_process(false)
 	remote.life_id += 1
-	remote.reset_at(Vector3(-15,.05,12))
-	game.player.reset_at(Vector3(-15,.05,6))
+	remote.reset_at(Vector3(-5,.05,19))
+	game.player.reset_at(Vector3(-5,.05,13))
 	game.net._spawn.rpc_id(remote_id,remote.position,remote.life_id)
 	mark("move")
 	check(await wait_for(func(): return marked("moved")),"Client submits movement input")
-	check(remote.position.x>-14.4 and remote.position.x<-9,"Host simulates remote movement within speed bounds")
+	check(remote.position.x>-4.4 and remote.position.x<1,"Host simulates remote movement within speed bounds")
 	check(remote.crouched,"Crouch reaches server collider")
 	mark("movement_checked")
 	check(await wait_for(func(): return marked("release")),"Client releases movement")
-	remote.reset_at(Vector3(-15,.05,12))
-	game.player.reset_at(Vector3(-15,.05,6))
+	remote.reset_at(Vector3(-5,.05,19))
+	game.player.reset_at(Vector3(-5,.05,13))
 	remote.life_id += 1
 	game.net._spawn.rpc_id(remote_id,remote.position,remote.life_id)
 	await get_tree().create_timer(.3).timeout
@@ -66,7 +66,12 @@ func host_test() -> void:
 	check(game.net.slots[0].deaths==1 and game.player.health==100,"Host dies and instantly respawns without shield")
 	check(p.progress.xp_for("YOU")==100,"Server awards exactly 100 headshot XP")
 	check(remote.ammo[0]==23,"Authoritative rifle magazine consumes one round")
+	var pings = game.radar.contacts(game.net.actors(),game.player.team,game.clock)
+	check(pings.any(func(dot): return not dot[1]),"A real remote shot reveals the shooter to the opposing minimap")
 	mark("shot_checked")
+	check(await wait_for(func(): return remote.parry_timer>0),"Client right-click activates an authoritative sword parry")
+	check(game.net._row(game.net.slots[p.slot])[10]>0,"Parry pose is included in remote snapshots")
+	mark("parry_checked")
 	check(await wait_for(func(): return marked("grenade")),"Client performs equip and short toss")
 	check(await wait_for(func(): return not game.grenades.is_empty()),"Server owns a thrown grenade")
 	check(remote.blast_count==0,"Grenade inventory enforced on server")
@@ -75,8 +80,8 @@ func host_test() -> void:
 	check(game.grenades.is_empty(),"Server grenade fuse resolves")
 	# Only the final valid kill is needed to exercise the real 250-kill transition.
 	game.combat.scores = [0,0,249]
-	remote.reset_at(Vector3(-15,.05,12))
-	game.player.reset_at(Vector3(-15,.05,6))
+	remote.reset_at(Vector3(-5,.05,19))
+	game.player.reset_at(Vector3(-5,.05,13))
 	remote.life_id += 1
 	game.net._spawn.rpc_id(remote_id,remote.position,remote.life_id)
 	await get_tree().create_timer(.3).timeout
@@ -132,6 +137,13 @@ func client_test() -> void:
 	check(game.progression.xp_for("YOU")==100,"Confirmed XP reaches client")
 	check(await wait_for(func(): return not game.kill_feed.is_empty() and game.kill_feed[0].killer=="YOU" and game.kill_feed[0].head),"Headshot feed identifies local killer")
 	await wait_for(func(): return marked("shot_checked"))
+	game.player.equip(2)
+	await get_tree().create_timer(.35).timeout
+	game.player.start_parry()
+	check(game.player.parry_timer>0,"Parry pose starts locally before the network reply")
+	await wait_for(func(): return marked("parry_checked"))
+	game.player.equip(0)
+	await get_tree().create_timer(.3).timeout
 	game.player.equip_grenade("blast")
 	await get_tree().create_timer(.3).timeout
 	game.player.throw_grenade("blast",true)

@@ -105,4 +105,5 @@ func reset() -> void:
 	_refresh_label()
 
 func _refresh_label() -> void:
-	title.text = "%s\n%d HP" % [target_name, health]
+	title.text = target_name
+	title.visible = game.mode=="training" or team==game.player.team

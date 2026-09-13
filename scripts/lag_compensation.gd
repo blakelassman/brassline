@@ -1,7 +1,10 @@
 extends RefCounted
 ## Read-only history: ray tests never teleport live actors or modify physics space.
 const MAX_REWIND = .5
-const HISTORY_SECONDS = .65
+const HISTORY_SECONDS = 1.1
+const MAX_HISTORY_FRAMES = 72
+# Client rewind is still capped at 500 ms on receipt. Additional retained poses
+# cover the server's bounded command queue; clients cannot request that extra age.
 var history: Dictionary = {}
 func clear() -> void:
 	history.clear()
@@ -17,7 +20,7 @@ func record(slots: Array, time: float) -> void:
 		if not history.has(slot.index): history[slot.index] = []
 		var frames = history[slot.index]
 		frames.append({"time":time,"instance":actor.get_instance_id(),"life":actor.life_id,"health":actor.health,"zones":zones})
-		while frames.size()>48 or (frames.size()>2 and frames[1].time<time-HISTORY_SECONDS): frames.pop_front()
+		while frames.size()>MAX_HISTORY_FRAMES or (frames.size()>2 and frames[1].time<time-HISTORY_SECONDS): frames.pop_front()
 func sample(slot: int, actor: Node, time: float) -> Array:
 	var frames = history.get(slot,[])
 	if frames.is_empty() or time<frames[0].time: return []
