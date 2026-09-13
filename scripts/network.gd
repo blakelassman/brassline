@@ -8,7 +8,7 @@ const Preferences = preload("res://scripts/preferences.gd")
 const LagCompensation = preload("res://scripts/lag_compensation.gd")
 var lag_comp = LagCompensation.new()
 var lag_rescued_hits = 0
-const PROTOCOL = 9
+const PROTOCOL = 10
 var game: Node
 var running = false
 var server = false
@@ -164,7 +164,7 @@ func _hello(protocol: int, secret: String, nickname: String, xp: int) -> void:
 func _authenticate(id: int, protocol: int, secret: String, nickname: String, xp: int) -> void:
 	if not pending.has(id) or pending[id].authenticated: return
 	if protocol!=PROTOCOL:
-		_reject.rpc_id(id,"Different game version. Everyone needs BRASSLINE 0.7.1.")
+		_reject.rpc_id(id,"Different game version. Everyone needs BRASSLINE 0.9.0.")
 		return
 	if secret!=password:
 		_reject.rpc_id(id,"Incorrect server password.")
@@ -216,10 +216,25 @@ func _loaded_peer(id: int, map_index: int, number: int) -> void:
 	if map_index!=game.current_map or number!=round_number:
 		_welcome.rpc_id(id,game.current_map,entry.slot,game.clock,round_number)
 		return
+	# Loading can finish out of reservation order. Balance the humans who can
+	# actually play, swapping pending reservations rather than creating 2v0.
+	var counts = [0,0,0]
+	for peer_id in peers:
+		if can_send(peer_id): counts[slots[peers[peer_id].slot].team] += 1
+	var preferred = 1 if counts[1]<=counts[2] else 2
+	if slots[entry.slot].team!=preferred:
+		for candidate in slots:
+			if candidate.team!=preferred or candidate.peer!=0: continue
+			var previous = entry.slot
+			for waiting_id in pending:
+				if waiting_id!=id and pending[waiting_id].get("slot",-1)==candidate.index:
+					pending[waiting_id].slot = previous
+			entry.slot = candidate.index
+			break
 	_remove_actor(entry.slot)
 	_attach_human(id,entry.slot,entry.name,entry.xp)
 	pending.erase(id)
-	_spawn.rpc_id(id,slots[entry.slot].actor.position,slots[entry.slot].actor.life_id)
+	_spawn.rpc_id(id,slots[entry.slot].actor.position,slots[entry.slot].actor.life_id,entry.slot)
 	print("HUMAN_JOIN peer=",id," slot=",entry.slot," actors=",actors().size())
 func _attach_human(id: int, slot: int, nickname: String, xp: int) -> void:
 	var actor = game.player if id==1 else Player.new()
@@ -435,7 +450,7 @@ func _physics_process(delta: float) -> void:
 func _row(slot: Dictionary) -> Array:
 	var a = slot.actor
 	var human = slot.peer>0
-	return [slot.index,a.position,a.velocity,a.rotation.y,a.pitch if human else 0.0,a.health,a.weapon if human else 0,a.crouched if human else false,a.life_id,a.reload_timer if human else a.reload_time,a.parry_timer if human else 0.0]
+	return [slot.index,a.position,a.velocity,a.rotation.y,a.pitch if human else 0.0,a.health,a.weapon if human else 0,a.crouched if human else false,a.life_id,a.reload_timer if human else a.reload_time,a.parry_timer if human else 0.0,a.cosmetics if human else {}]
 func board_rows(team: int) -> Array:
 	var result: Array = []
 	for s in slots:
@@ -587,19 +602,26 @@ func _reconcile(row: Array, own: Dictionary) -> void:
 	var pending_fire = [0,0,0,0]
 	for action in actions:
 		if action[1]=="fire": pending_fire[action[2]] += 1
-	for index in range(4): a.ammo[index] = maxi(0,own.ammo[index]-pending_fire[index])
+	# Advance acknowledged reload state along the pending input timeline before
+	# subtracting shots, including shots fired immediately after the local reload.
+	var remaining_reload = maxf(0,row[9]-inputs.size()*FIXED_STEP)
+	for index in range(4):
+		var base_ammo = own.ammo[index]
+		if index==row[6] and row[9]>0 and remaining_reload==0: base_ammo = game.Rules.WEAPONS[index]["mag"]
+		a.ammo[index] = maxi(0,base_ammo-pending_fire[index])
 	if actions.is_empty():
 		if a.weapon==2: a.fire_cooldown = maxf(a.fire_cooldown,own.get("recovery",0.0)-ping_ms/2000.0)
 		a.blast_count = own.blast
 		a.smoke_count = own.smoke
 		a.held_grenade = own.held
 		a.weapon = row[6]
-		var remaining_reload = maxf(0,row[9]-ping_ms/2000.0)
 		if absf(a.reload_timer-remaining_reload)>.10: a.reload_timer = remaining_reload
-		if row[9]>0 and remaining_reload==0: a.ammo[a.weapon] = game.Rules.WEAPONS[a.weapon]["mag"]
 @rpc("authority","call_remote","reliable",0)
-func _spawn(at: Vector3, life: int) -> void:
+func _spawn(at: Vector3, life: int, joined_slot: int = -1) -> void:
 	if server or life<game.player.life_id or (session_ready and life<=spawned_life): return
+	if joined_slot>=0 and joined_slot<10:
+		own_slot = joined_slot
+		game.player.net_slot = joined_slot
 	spawned_life = life
 	session_ready = true
 	loading_round = false
@@ -616,6 +638,7 @@ func _spawn(at: Vector3, life: int) -> void:
 	game.player.reset_at(at)
 	game.player.team = 1 if own_slot<5 else 2
 	game.player.set_physics_process(true)
+	_cosmetic_request.rpc_id(1,game.cosmetics.equipped)
 func human_died(actor: Node) -> void:
 	if not server: return
 	_respawn_human.call_deferred(actor)
@@ -627,6 +650,7 @@ func _respawn_human(actor: Node) -> void:
 func fell(actor: Node) -> void:
 	if not server: return
 	actor.health = 0
+	game.challenge_event(actor,"death")
 	if actor.net_slot>=0: slots[actor.net_slot].deaths += 1
 	human_died(actor)
 func slot_from_name(nickname: String) -> int:
@@ -637,11 +661,13 @@ func display_name(nickname: String) -> String:
 	var slot = slot_from_name(nickname)
 	if slot<0 or slot>=slots.size(): return nickname
 	return "YOU" if slot==own_slot else slots[slot].name
-func record_kill(victim: String, weapon: String, head: bool, air: bool, group: int, killer: String, team: int, one_shot: bool) -> void:
+func record_kill(victim: String, weapon: String, head: bool, air: bool, group: int, killer: String, team: int, one_shot: bool, context: Dictionary = {}) -> void:
 	if not server or not round_active: return
 	var k = slot_from_name(killer)
 	var v = slot_from_name(victim)
-	if k<0 or v<0 or k==v: return
+	if k<0 or v<0 or k==v or slots[k].team==slots[v].team: return
+	context = context.duplicate()
+	context.merge({"time":game.clock,"one_shot":one_shot},true)
 	slots[k].kills += 1
 	slots[v].deaths += 1
 	game.combat.scores[team] += 1
@@ -649,14 +675,19 @@ func record_kill(victim: String, weapon: String, head: bool, air: bool, group: i
 		peers[slots[k].peer].progress.record("YOU",victim,team,head,one_shot,game.clock,group,weapon=="LONGSHOT")
 	else: slots[k].xp += 100 if head or one_shot else 50
 	if peers.has(slots[v].peer): peers[slots[v].peer].progress.finish_chain(game.clock)
-	_kill(k,v,weapon,head,air,group,team)
+	_kill(k,v,weapon,head,air,group,team,context)
 	for id in peers:
-		if id!=1 and can_send(id): _kill.rpc_id(id,k,v,weapon,head,air,group,team)
+		if id!=1 and can_send(id): _kill.rpc_id(id,k,v,weapon,head,air,group,team,context)
 	if game.combat.scores[team]>=KILL_LIMIT: _end_round()
 @rpc("authority","call_remote","reliable",0)
-func _kill(k: int, v: int, weapon: String, head: bool, air: bool, group: int, team: int) -> void:
+func _kill(k: int, v: int, weapon: String, head: bool, air: bool, group: int, team: int, context: Dictionary = {}) -> void:
 	var killer = "YOU" if k==own_slot else (slots[k].name if k<slots.size() else "PLAYER")
 	var victim = "YOU" if v==own_slot else (slots[v].name if v<slots.size() else "PLAYER")
+	if v==own_slot: game.accept_challenge("death",{"killer":"S%d" % k})
+	if k==own_slot:
+		var event = context.duplicate()
+		event.merge({"weapon":weapon,"head":head,"air":air,"group":group,"victim":"S%d" % v},true)
+		game.accept_challenge("kill",event)
 	game.feed_entry(victim,weapon,head,air,group,killer,team)
 	if k==own_slot and not head: game.sound("kill",-19)
 func hit_feedback(actor: Node, head: bool) -> void:
@@ -796,7 +827,11 @@ func _end_round() -> void:
 	votes.clear()
 	vote_counts = [0,0,0,0]
 	vote_end = game.clock+VOTE_TIME
-	for p in peers.values(): p.progress.finish_chain(game.clock)
+	for id in peers:
+		var p = peers[id]
+		p.progress.finish_chain(game.clock)
+		var team = slots[p.slot].team
+		if game.combat.scores[team]>game.combat.scores[3-team]: game.challenge_event(slots[p.slot].actor,"wins")
 	_round_notice(round_info())
 	for id in peers:
 		if id!=1 and can_send(id): _round_notice.rpc_id(id,round_info())
@@ -979,3 +1014,21 @@ func bounded_shot_time(peer: Dictionary, requested: float) -> float:
 	# and a small jitter margin, with an absolute half-second ceiling.
 	var allowance = minf(LagCompensation.MAX_REWIND,rtt+.18)
 	return clampf(requested,game.clock-allowance,game.clock)
+
+@rpc("authority","call_remote","reliable",0)
+func _challenge(kind: String, data: Dictionary = {}) -> void:
+	if kind in ["parries","boosts","wins","death"]: game.accept_challenge(kind,data)
+
+@rpc("any_peer","call_remote","reliable",0)
+func _cosmetic_request(loadout: Dictionary) -> void:
+	if not server: return
+	var id = multiplayer.get_remote_sender_id()
+	if not peers.has(id) or loadout.size()>5: return
+	var p = peers[id]
+	if p.budget<5: return
+	p.budget -= 5
+	var clean = preload("res://scripts/cosmetics.gd").clean_loadout(loadout)
+	var actor = slots[p.slot].actor
+	if actor.cosmetics==clean: return
+	actor.cosmetics = clean
+	actor.viewmodel.apply_cosmetics()

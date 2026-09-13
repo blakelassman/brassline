@@ -1,10 +1,19 @@
-BRASSLINE 0.8.0 - DISTRICTS & COMBAT UPDATE
+BRASSLINE 0.9.0 - CHALLENGES & LOCKER UPDATE
 
 EVERYONE MUST UPDATE: this build uses a new network protocol.
 Update the source checkout or extract a complete package. Keep UDP 27020 and your existing port rule.
 Your saved level and settings carry over automatically on the same Windows user.
 
 WHAT CHANGED
+- CHALLENGES: 86 permanent milestones, jump shots, collats, 10/30/50 killstreaks.
+- Top-center notifications and a quest chime; notifications survive respawning.
+- LOCKER: preview and equip operator outfits and all four weapon finishes.
+- Open free unlimited cases. Items save automatically. Duplicates stack.
+- Special rarity is 0.25% per opening (1 in 400), not a guaranteed 400th case.
+- Rifle has a stronger, repeatable 24-round S recoil pattern. Counter it with
+  mouse movement; a 650 ms pause resets the pattern. Practice while stationary.
+
+ALSO INCLUDED
 - FOV-scaled scope sensitivity; a small amount of counter-strafe momentum.
 - Settings: fullscreen, resolution presets and custom width/height. Apply Display.
 - Clean HUD. Hold Tab for K/D, levels, ping and FPS.
@@ -15,7 +24,7 @@ WHAT CHANGED
 GIT SOURCE CHECKOUT
 Keep your existing engine folder beside project.godot, then run START_BRASSLINE.bat.
 Engine binaries are excluded from Git. An existing engine folder survives updates.
-Your friends need the same 0.8.0 source and engine folder, or a full portable package.
+Your friends need the same 0.9.0 source and engine folder, or a full portable package.
 
 
 PLAY

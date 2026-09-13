@@ -139,7 +139,14 @@ func client_prediction() -> void:
 	game.player.start_reload()
 	check(game.player.reload_timer>0,"Reload begins locally without a round trip")
 	await get_tree().create_timer(2.5).timeout
+	print("RELOAD_METRICS timer=",game.player.reload_timer," ammo=",game.player.ammo[3]," pending_ticks=",game.net.inputs.size()," ping=",game.net.ping_ms)
 	check(game.player.reload_timer==0 and game.player.ammo[3]==6,"Predicted reload settles to server's six-round magazine")
+	game.player.shoot()
+	var post_reload_action = game.net.action_id
+	check(game.player.ammo[3]==5,"Shot immediately after predicted reload consumes exactly one round")
+	check(await wait_for(func(): return not game.net.actions.any(func(action): return action[0]==post_reload_action),2),"Server acknowledges the post-reload shot")
+	await get_tree().create_timer(.25).timeout
+	check(game.player.ammo[3]==5,"Post-reload reconciliation neither refunds nor double-spends the shot")
 	Input.action_release("aim")
 	game.player.equip_grenade("smoke")
 	await get_tree().create_timer(.25).timeout

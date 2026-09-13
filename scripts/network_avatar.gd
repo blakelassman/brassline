@@ -1,5 +1,6 @@
 extends CharacterBody3D
 const RemoteView = preload("res://scripts/remote_view.gd")
+var cosmetics: Dictionary = {}
 var game: Node
 var team = 1
 var target_name = "Player"
@@ -30,6 +31,10 @@ func _ready() -> void:
 	viewmodel.player = self
 	add_child(viewmodel)
 func receive(row: Array, time: float) -> void:
+	var incoming = row[11] if row.size()>11 else {}
+	if cosmetics!=incoming:
+		cosmetics = incoming.duplicate()
+		viewmodel.apply_cosmetics()
 	if life_id!=row[8] or position.distance_to(row[1])>8:
 		samples.clear()
 		position = row[1]

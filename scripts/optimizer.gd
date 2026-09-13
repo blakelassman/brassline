@@ -4,9 +4,9 @@ static var vertex_material: StandardMaterial3D
 static func collect(node: Node3D, root: Node3D, excluded: Array, meshes: Array) -> void:
 	for child in node.get_children():
 		if child in excluded: continue
-		if child is MeshInstance3D and child.mesh!=null and child.material_override is StandardMaterial3D:
+		if child is MeshInstance3D and child.mesh!=null and child.material_override is Material:
 			var mat = child.material_override
-			if mat.transparency==BaseMaterial3D.TRANSPARENCY_DISABLED and not mat.emission_enabled:
+			if mat is ShaderMaterial or (mat is StandardMaterial3D and mat.transparency==BaseMaterial3D.TRANSPARENCY_DISABLED and not mat.emission_enabled):
 				meshes.append(child)
 		elif child is Node3D: collect(child,root,excluded,meshes)
 static func batch(root: Node3D, excluded: Array = [], vertex_colors: bool = false) -> int:
@@ -15,18 +15,19 @@ static func batch(root: Node3D, excluded: Array = [], vertex_colors: bool = fals
 	collect(root,root,excluded,meshes)
 	var groups: Dictionary = {}
 	for instance in meshes:
-		var mat = instance.material_override as StandardMaterial3D
-		var key = "color" if vertex_colors else str([mat.albedo_color,mat.roughness,mat.metallic,mat.albedo_texture,mat.normal_texture,mat.uv1_scale,mat.uv1_triplanar,mat.normal_scale])
+		var mat = instance.material_override
+		var key = str(mat.get_instance_id()) if mat is ShaderMaterial else ("color" if vertex_colors else str([mat.albedo_color,mat.roughness,mat.metallic,mat.albedo_texture,mat.normal_texture,mat.uv1_scale,mat.uv1_triplanar,mat.normal_scale]))
 		if not groups.has(key): groups[key] = []
 		groups[key].append(instance)
 	var removed = 0
 	for group in groups.values():
 		if group.size()<2: continue
+		var use_colors = vertex_colors and group[0].material_override is StandardMaterial3D
 		var st = SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		for instance in group:
 			var transform = root.global_transform.affine_inverse()*instance.global_transform
-			if vertex_colors:
+			if use_colors:
 				var arrays = instance.mesh.surface_get_arrays(0)
 				var vertices = arrays[Mesh.ARRAY_VERTEX]
 				var normals = arrays[Mesh.ARRAY_NORMAL]
@@ -40,7 +41,7 @@ static func batch(root: Node3D, excluded: Array = [], vertex_colors: bool = fals
 			else: st.append_from(instance.mesh,0,transform)
 		var merged = MeshInstance3D.new()
 		merged.mesh = st.commit()
-		if vertex_colors:
+		if use_colors:
 			if vertex_material==null:
 				vertex_material = StandardMaterial3D.new()
 				vertex_material.vertex_color_use_as_albedo = true

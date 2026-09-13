@@ -1,10 +1,31 @@
-# BRASSLINE 0.8.0
+# BRASSLINE 0.9.0
 
 A free Windows Godot FPS prototype with movement-focused combat, offline practice,
 and self-hosted internet multiplayer. Extract the complete ZIP and run
 `START_BRASSLINE.bat`. See `START_HERE.txt` for controls and `HOSTING.txt` for hosting.
 
-## New in 0.8.0
+## New in 0.9.0
+
+- **86 permanent challenges** across 24 tracks: jump shots, airborne headshots,
+  boosted kills, double/triple collaterals, 10/30/50-kill streaks, quickscopes,
+  no-scopes, weapon mastery, parries, payback and team wins. Top-center medal
+  notifications use an original quest chime and survive respawns.
+- **Learnable rifle recoil:** a fixed 24-round S-shaped spray with stronger
+  horizontal reversals. Pull down and counter its left/right movement. A 650 ms
+  pause resets it; stationary spread remains zero, movement spread remains active.
+- **Locker:** 55 operator/weapon styles, rotating previews, saved inventories,
+  equipment/rarity filters and online cosmetic replication. Team-colored armor
+  stays visible. No cosmetic changes damage, accuracy, speed or hitboxes.
+- **District Collection cases:** free and unlimited, with a scrolling reveal,
+  skip option, duplicate counts and one-click equip. Drops save before animation.
+  Rarity odds: Field 70%, Signal 22%, Elite 6%, Mythic 1.75%, Special **0.25%
+  (1 in 400 per opening)**. No purchases, keys, trading or cash value.
+
+Everyone must update together (network protocol **10**). Existing XP, display and
+keybind settings carry over. Challenges and inventory persist on the same Windows
+user profile. See `docs/UPDATE_0_9.md` for behavior and verification details.
+
+## Previous: 0.8.0
 
 - Scope sensitivity follows the current FOV, including the zoom transition.
 - Borderless fullscreen, resolution presets through 4K, custom window sizes and
@@ -17,8 +38,7 @@ and self-hosted internet multiplayer. Extract the complete ZIP and run
   continuous ramp collision under visible stairs, upper bot routes and solid
   grenade-accessible roofs. Original armor, weapon geometry and parry sound.
 
-Everyone must run this version together (network protocol 9). Existing saves
-and UDP 27020 settings carry over. See `docs/UPDATE_0_8.md` for validation details.
+UDP 27020 remains unchanged. The previous update is documented in `docs/UPDATE_0_8.md`.
 
 ## Play
 
@@ -45,7 +65,7 @@ your router must forward the UDP port to your host PC.
 `START_DEDICATED_SERVER.bat` optionally runs the same project headlessly using
 `server.cfg`. You can instead use **Host & Play** in the menu.
 
-Levels and settings use an atomic local profile with a backup:
+Levels, settings, challenge progress and inventory use an atomic local profile with a backup:
 `%APPDATA%/Godot/app_userdata/Brassline Offline Arenas/profile_v1.json`.
 The old application directory name is deliberately retained for save stability.
 The dedicated server has a separate `server_profile_v1.json`.

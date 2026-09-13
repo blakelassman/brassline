@@ -33,6 +33,9 @@ func run(g: Node) -> void:
 	if game.net.running: await game.net.leave()
 	await game.quit_game()
 func host_test() -> void:
+	game.cosmetics.owned.armor_royal = 1
+	game.cosmetics.equip_item("armor_royal")
+	game.apply_cosmetics()
 	check(await game.net.host(27917,"test-only",false),"Host creates real UDP server")
 	check(game.net.actors().size()==10 and game.combat.bots.size()==9,"Host fills 1 human / 9 bots")
 	mark("host")
@@ -44,6 +47,7 @@ func host_test() -> void:
 	if remote_id==0: return
 	var p = game.net.peers[remote_id]
 	var remote = game.net.slots[p.slot].actor
+	check(await wait_for(func(): return remote.cosmetics.get("rifle","")=="rifle_circuit"),"Client equipped finish reaches the actual server actor")
 	check(p.slot==5 and remote.team==2 and game.combat.bots.size()==8,"First friend joins opposing team: 1v1 humans, 4v4 bots")
 	game.player.set_physics_process(false)
 	remote.life_id += 1
@@ -115,9 +119,13 @@ func host_test() -> void:
 func client_test() -> void:
 	check(await wait_for(func(): return marked("host")),"Host available")
 	game.prefs.data.name = "Net Tester"
+	game.cosmetics.owned.rifle_circuit = 1
+	game.cosmetics.equip_item("rifle_circuit")
+	game.apply_cosmetics()
 	game.net.join("127.0.0.1",join_port,"test-only")
 	check(await wait_for(func(): return game.net.is_client_ready()),"Client completes real ENet handshake")
 	check(await wait_for(func(): return game.net.snapshots_received>3),"Client receives repeated authoritative snapshots")
+	check(await wait_for(func(): return game.net.proxies.has(0) and game.net.proxies[0].cosmetics.get("armor","")=="armor_royal"),"Host outfit appears on the connecting client replica")
 	check(game.net.proxies.size()==9,"Nine remote actors are rendered as replicas")
 	await wait_for(func(): return marked("move"))
 	Input.action_press("right")
@@ -135,6 +143,8 @@ func client_test() -> void:
 	game.player.shoot()
 	check(await wait_for(func(): return game.kills==1),"Confirmed kill updates client scoreboard")
 	check(game.progression.xp_for("YOU")==100,"Confirmed XP reaches client")
+	check(await wait_for(func(): return game.challenges.stats.get("headshots",0)==1),"Only server-confirmed headshot updates client achievements")
+	check(game.challenges.unlocked.has("headshots_1"),"Online headshot unlocks the persistent challenge")
 	check(await wait_for(func(): return not game.kill_feed.is_empty() and game.kill_feed[0].killer=="YOU" and game.kill_feed[0].head),"Headshot feed identifies local killer")
 	await wait_for(func(): return marked("shot_checked"))
 	game.player.equip(2)
@@ -156,16 +166,20 @@ func client_test() -> void:
 	game.player.camera.rotation.x = 0
 	game.player.shoot()
 	check(await wait_for(func(): return not game.net.round_active),"Client receives end-of-round and vote state")
+	check(await wait_for(func(): return game.challenges.stats.get("wins",0)==1),"Winning client receives its authoritative victory challenge")
 	game.net.vote(2)
 	game.net.vote(1)
 	check(await wait_for(func(): return game.current_map==1 and game.net.is_client_ready(),15),"Client reloads voted arena without reconnecting")
 	check(game.progression.xp_for("YOU")>=200,"XP survives map rotation")
+	check(game.challenges.streak==0 and game.challenges.stats.get("wins",0)==1,"Map rotation resets life streak while preserving lifetime achievements")
+	check(game.player.cosmetics.get("rifle","")=="rifle_circuit","Equipped finish survives map rotation")
 	mark("map_loaded")
 	await wait_for(func(): return marked("leave"))
 	await game.net.leave()
 	check(not game.net.running,"Client gracefully disconnects")
 	var saved = game.Preferences.new(game.prefs.path)
 	saved.load_profile()
+	check(saved.data.challenges.stats.get("headshots",0)>=2 and saved.data.cosmetics.equipped.rifle=="rifle_circuit","Confirmed achievements and equipment save on disconnect")
 	check(saved.data.xp>=200,"Confirmed multiplayer XP is saved to disk")
 	await wait_for(func(): return marked("rejected"))
 	game.net.join("127.0.0.1",join_port,"test-only")

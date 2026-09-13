@@ -1,5 +1,6 @@
 extends PanelContainer
 const Preferences = preload("res://scripts/preferences.gd")
+var collection_menu: Node
 var game: Node
 var resume_button: Button
 var pages: Dictionary = {}
@@ -32,7 +33,7 @@ func _ready() -> void:
 	var top = HBoxContainer.new()
 	shell.add_child(top)
 	label(top,"BRASSLINE",46,ink).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label(top,"MULTIPLAYER  /  0.8.0",15,gold)
+	label(top,"MULTIPLAYER  /  0.9.0",15,gold)
 	var columns = HBoxContainer.new()
 	columns.add_theme_constant_override("separation",32)
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -47,7 +48,7 @@ func _ready() -> void:
 	var spacer = Control.new()
 	spacer.custom_minimum_size.y = 20
 	nav.add_child(spacer)
-	for page in ["PLAY","ONLINE","SETTINGS","CONTROLS"]:
+	for page in ["PLAY","ONLINE","LOCKER","CHALLENGES","SETTINGS","CONTROLS"]:
 		nav_buttons[page] = button(nav,page,func(): show_page(page))
 	resume_button = button(nav,"RESUME",func(): game.set_active(true))
 	resume_button.hide()
@@ -61,7 +62,7 @@ func _ready() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_stylebox_override("panel",style(Color("142b34"),24))
 	columns.add_child(content)
-	for name in ["PLAY","ONLINE","SETTINGS","CONTROLS"]:
+	for name in ["PLAY","ONLINE","LOCKER","CHALLENGES","SETTINGS","CONTROLS"]:
 		var page = VBoxContainer.new()
 		page.add_theme_constant_override("separation",14)
 		content.add_child(page)
@@ -70,6 +71,9 @@ func _ready() -> void:
 	_build_online(pages.ONLINE)
 	_build_settings(pages.SETTINGS)
 	_build_controls(pages.CONTROLS)
+	collection_menu = preload("res://scripts/collection_menu.gd").new()
+	add_child(collection_menu)
+	collection_menu.build(self)
 	status_label = label(shell,"",14,muted)
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.custom_minimum_size.y = 40
