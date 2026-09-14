@@ -1,7 +1,27 @@
 # BRASSLINE 0.9.0
 
 A free Windows Godot FPS prototype with movement-focused combat, offline practice,
-and self-hosted internet multiplayer. Extract the complete ZIP and run
+and self-hosted internet multiplayer.
+
+## Install once, update from the launcher
+
+After the launcher PR is merged and the **Windows launcher** workflow finishes,
+[download the Windows launcher](https://github.com/blakelassman/brassline/releases/download/launcher/Brassline_Launcher_Windows.zip),
+extract it, and double-click `BRASSLINE_LAUNCHER.bat`. Click **Install & Play**.
+For later releases, use **Update & Play**: only changed game files download.
+The engine downloads once, or is reused from an existing `engine` folder next
+to the launcher. **Desktop shortcut** adds a permanent desktop entry.
+
+**Play installed** works offline. **Repair** replaces damaged files, and
+**Previous version** rolls back a completed update. Saved level, challenges,
+inventory and settings stay in the existing Windows profile. Close the game
+and dedicated server before updating. Everyone in an online match should update.
+
+The launcher uses built-in Windows PowerShell 5.1 on 64-bit Windows 10/11.
+No Git, Python, editor installation or account is needed for players.
+[Launcher setup and release details](docs/LAUNCHER.md).
+
+Source checkouts and existing portable packages can still run
 `START_BRASSLINE.bat`. See `START_HERE.txt` for controls and `HOSTING.txt` for hosting.
 
 ## New in 0.9.0

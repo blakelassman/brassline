@@ -1,0 +1,66 @@
+name: Windows launcher
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: launcher-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test updater on Windows PowerShell 5.1
+        shell: powershell
+        run: ./tests/test_launcher.ps1
+      - name: Build commit-pinned channel and launcher
+        shell: powershell
+        run: python tests/package_launcher.py dist --commit "$env:GITHUB_SHA"
+      - name: Verify real engine download, import, and launcher UI
+        shell: powershell
+        run: |
+          . ./launcher/Core.ps1
+          $manifest = Read-Json ./dist/channel.json
+          Assert-Manifest $manifest
+          Install-Engine "$env:RUNNER_TEMP/brassline-engine" $manifest "$env:RUNNER_TEMP/empty"
+          $engine = Get-EnginePath "$env:RUNNER_TEMP/brassline-engine" $manifest
+          # Import the exact runtime payload, with no tests or source-only assets.
+          $runtime = "$env:RUNNER_TEMP/brassline-runtime"
+          New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+          foreach ($file in $manifest.files) {
+            $dest = Join-Path $runtime $file.path
+            New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null
+            Copy-Item -LiteralPath $file.path -Destination $dest
+          }
+          Invoke-GameImport $engine $runtime
+          ./launcher/Launcher.ps1 -Root "$env:RUNNER_TEMP/brassline-ui" -SmokeTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Brassline-launcher-Windows
+          path: dist/*
+  publish:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Brassline-launcher-Windows
+          path: dist
+      - name: Publish launcher and channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view launcher >/dev/null 2>&1; then
+            gh release create launcher --target "$GITHUB_SHA" --title "BRASSLINE Launcher" --notes "Download Brassline_Launcher_Windows.zip once, extract it, and run BRASSLINE_LAUNCHER.bat. Future game updates install from the launcher. Windows 10/11, 64-bit."
+          fi
+          gh release upload launcher dist/Brassline_Launcher_Windows.zip dist/SHA256SUMS.txt --clobber
+          # Clients see the new commit only after verification and packaging succeed.
+          gh release upload launcher dist/channel.json --clobber
