@@ -707,7 +707,7 @@ func _shot_fx(slot: int, start: Vector3, end: Vector3, weapon: int) -> void:
 	if slot==own_slot: return # Shooter already rendered this instantly.
 	game._tracer(start,end)
 	if slot!=own_slot:
-		game.world_sound("sniper" if weapon==3 else ("pistol" if weapon==1 else "rifle"),start,-16)
+		game.world_sound("sniper" if weapon==3 else ("pistol" if weapon==1 else "rifle"),start,-16,false)
 		if proxies.has(slot): proxies[slot].viewmodel.on_shot()
 func blast_fx(at: Vector3) -> void:
 	if server:
@@ -998,7 +998,7 @@ func audio_fx(slot: int, key: String, at: Vector3, volume: float) -> void:
 		if id!=1 and can_send(id): _audio_fx.rpc_id(id,slot,key,at,volume)
 @rpc("authority","call_remote","unreliable",2)
 func _audio_fx(slot: int, key: String, at: Vector3, volume: float) -> void:
-	if slot!=own_slot: game.world_sound(key,at,volume)
+	if slot!=own_slot: game.world_sound(key,at,volume,false)
 
 func can_send(id: int) -> bool:
 	if id==1: return server

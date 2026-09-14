@@ -1,0 +1,128 @@
+{
+  "rifle": [
+    "rifle_01.ogg",
+    "rifle_02.ogg",
+    "rifle_03.ogg",
+    "rifle_04.ogg"
+  ],
+  "pistol": [
+    "pistol_01.ogg",
+    "pistol_02.ogg"
+  ],
+  "sniper": [
+    "sniper_01.ogg",
+    "sniper_02.ogg"
+  ],
+  "step_concrete": [
+    "step_concrete_01.ogg",
+    "step_concrete_02.ogg",
+    "step_concrete_03.ogg",
+    "step_concrete_04.ogg"
+  ],
+  "step_tile": [
+    "step_tile_01.ogg",
+    "step_tile_02.ogg",
+    "step_tile_03.ogg",
+    "step_tile_04.ogg"
+  ],
+  "step_metal": [
+    "step_metal_01.ogg",
+    "step_metal_02.ogg",
+    "step_metal_03.ogg",
+    "step_metal_04.ogg"
+  ],
+  "step": [
+    "step_01.ogg"
+  ],
+  "jump": [
+    "jump_01.ogg"
+  ],
+  "land": [
+    "land_01.ogg"
+  ],
+  "mag_out": [
+    "mag_out_01.ogg"
+  ],
+  "mag_in": [
+    "mag_in_01.ogg"
+  ],
+  "slide": [
+    "slide_01.ogg"
+  ],
+  "bolt_open": [
+    "bolt_open_01.ogg"
+  ],
+  "bolt_close": [
+    "bolt_close_01.ogg"
+  ],
+  "equip": [
+    "equip_01.ogg"
+  ],
+  "empty": [
+    "empty_01.ogg"
+  ],
+  "head": [
+    "head_01.ogg",
+    "head_02.ogg"
+  ],
+  "hit": [
+    "hit_01.ogg"
+  ],
+  "hurt": [
+    "hurt_01.ogg"
+  ],
+  "impact_concrete": [
+    "impact_concrete_01.ogg"
+  ],
+  "impact_metal": [
+    "impact_metal_01.ogg"
+  ],
+  "grenade_bounce": [
+    "grenade_bounce_01.ogg"
+  ],
+  "parry": [
+    "parry_01.ogg"
+  ],
+  "sword": [
+    "sword_01.ogg"
+  ],
+  "blast": [
+    "blast_01.ogg"
+  ],
+  "smoke_hiss": [
+    "smoke_hiss_01.ogg"
+  ],
+  "tick": [
+    "tick_01.ogg"
+  ],
+  "ui": [
+    "ui_01.ogg"
+  ],
+  "case_tick": [
+    "case_tick_01.ogg"
+  ],
+  "kill": [
+    "kill_01.ogg"
+  ],
+  "achievement": [
+    "achievement_01.ogg"
+  ],
+  "case_reveal": [
+    "case_reveal_01.ogg"
+  ],
+  "drone": [
+    "drone_01.ogg"
+  ],
+  "ambient_foundry": [
+    "ambient_foundry_01.ogg"
+  ],
+  "ambient_dock": [
+    "ambient_dock_01.ogg"
+  ],
+  "ambient_sunspire": [
+    "ambient_sunspire_01.ogg"
+  ],
+  "ambient_relay": [
+    "ambient_relay_01.ogg"
+  ]
+}

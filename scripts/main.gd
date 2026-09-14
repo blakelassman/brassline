@@ -33,6 +33,8 @@ const Grenade = preload("res://scripts/grenade.gd")
 const Combat = preload("res://scripts/combat.gd")
 const Hud = preload("res://scripts/hud.gd")
 
+var audio_mix = preload("res://scripts/audio_mix.gd").new()
+var drone: AudioStreamPlayer
 var ambience: AudioStreamPlayer
 var ui_speaker: AudioStreamPlayer
 var audio_rng = RandomNumberGenerator.new()
@@ -134,6 +136,8 @@ func _ready() -> void:
 		call_deferred("_display_test")
 	elif "--polish-test" in args:
 		call_deferred("_polish_test")
+	elif "--audio-test" in args:
+		call_deferred("_audio_test")
 	elif "--settings-test" in args:
 		call_deferred("_settings_test")
 	elif "--expansion-test" in args:
@@ -195,49 +199,14 @@ func _target(pos: Vector3, title: String, moving: bool, team: int = 2) -> void:
 	targets.append(target)
 
 func _load_audio() -> void:
-	for cue in ["achievement","case_tick","case_reveal"]: audio[cue] = preload("res://scripts/reward_audio.gd").make(cue)
-	for key in ["rifle","pistol","blast","tick","jump","hit","head","equip","sword","parry","step","sniper","bolt_open","bolt_close","hurt","mag_out","mag_in","slide","empty","land","step_concrete","step_metal","step_tile","grenade_bounce","smoke_hiss","impact_concrete","impact_metal","ui","kill","ambient_foundry","ambient_dock","ambient_sunspire","ambient_relay"]:
-		audio[key] = AudioStreamWAV.load_from_file("res://assets/%s.wav" % key)
-	ambience = AudioStreamPlayer.new()
-	add_child(ambience)
-	ambience.volume_db = -24
-	ui_speaker = AudioStreamPlayer.new()
-	add_child(ui_speaker)
-	ui_speaker.stream = audio["ui"]
-	ui_speaker.volume_db = -20
-	audio_rng.seed = 602026
-	for i in range(12):
-		var spatial = AudioStreamPlayer3D.new()
-		spatial.unit_size = 4
-		spatial.max_distance = 48
-		add_child(spatial)
-		world_sounds.append(spatial)
-	for i in range(12):
-		var speaker = AudioStreamPlayer.new()
-		add_child(speaker)
-		sound_pool.append(speaker)
+	audio_mix.setup(self)
 
 func sound(key: String, volume: float = -12.0) -> void:
-	if DisplayServer.get_name() == "headless" or not audio.has(key):
-		return
-	var speaker = sound_pool[sound_index % sound_pool.size()]
-	sound_index += 1
-	speaker.stream = audio[key]
-	speaker.volume_db = volume
-	speaker.pitch_scale = audio_rng.randf_range(.94,1.06) if key.begins_with("step_") or key.begins_with("impact_") else 1.0
-	speaker.play()
+	audio_mix.local(self,key,volume)
 
 func world_sound(key: String, at: Vector3, volume: float, replicate: bool = true) -> void:
 	if replicate and net.running and net.server and key not in ["rifle","pistol","sniper","blast"]: net.audio_fx(-1,key,at,volume)
-	if DisplayServer.get_name()=="headless" or not audio.has(key):
-		return
-	var speaker = world_sounds[world_sound_index % world_sounds.size()]
-	world_sound_index += 1
-	speaker.position = at
-	speaker.stream = audio[key]
-	speaker.volume_db = volume
-	speaker.pitch_scale = audio_rng.randf_range(.94,1.06) if key.begins_with("step_") or key.begins_with("impact_") else 1.0
-	speaker.play()
+	audio_mix.spatial(self,key,at,volume)
 
 func start_mode(selected: String, map_index: int = -1) -> void:
 	if changing_map: return
@@ -397,7 +366,7 @@ func explode(origin: Vector3, owner_actor: Node = null, source_team: int = 1, ow
 	if net.running: net.blast_fx(origin)
 	action_serial += 1
 	effects.burst(origin)
-	sound("blast", -8.0)
+	world_sound("blast",origin,-8.0,false)
 	if is_instance_valid(shooter):
 		var distance = (shooter.global_position + Vector3.UP * 0.4).distance_to(origin)
 		if shooter.health>0 and distance < Rules.BLAST_RADIUS and unobstructed(origin, shooter.global_position + Vector3.UP * 0.7):
@@ -805,10 +774,8 @@ func _capture() -> void:
 func start_ambience() -> void:
 	if DisplayServer.get_name()=="headless": return
 	var key = ["ambient_foundry","ambient_dock","ambient_sunspire","ambient_relay"][current_map]
-	var stream = audio[key] as AudioStreamWAV
-	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	stream.loop_begin = 0
-	stream.loop_end = int(stream.get_length()*stream.mix_rate)
+	var stream = audio[key] as AudioStreamOggVorbis
+	stream.loop = true
 	ambience.stream = stream
 	ambience.play()
 
@@ -838,6 +805,7 @@ func quit_game() -> void:
 	save_profile()
 	set_active(false)
 	ambience.stop()
+	drone.stop()
 	ui_speaker.stop()
 	for speaker in sound_pool: speaker.stop()
 	for speaker in world_sounds: speaker.stop()
@@ -882,7 +850,7 @@ func _collection_test() -> void:
 	await suite.run(self)
 func apply_settings() -> void:
 	player.sensitivity = prefs.data.sensitivity
-	AudioServer.set_bus_volume_db(0,linear_to_db(maxf(.0001,prefs.data.volume)))
+	audio_mix.apply(prefs.data)
 	Engine.max_fps = int(prefs.data.fps_limit)
 	get_viewport().msaa_3d = Viewport.MSAA_2X if prefs.data.quality==2 else Viewport.MSAA_DISABLED
 	for light in world_root.find_children("*","DirectionalLight3D",true,false): light.shadow_enabled = prefs.data.quality==2
@@ -948,5 +916,10 @@ func _polish_test() -> void:
 
 func _display_test() -> void:
 	var suite = load("res://tests/test_display.gd").new()
+	add_child(suite)
+	await suite.run(self)
+
+func _audio_test() -> void:
+	var suite = load("res://tests/test_audio.gd").new()
 	add_child(suite)
 	await suite.run(self)

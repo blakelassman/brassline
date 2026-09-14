@@ -24,6 +24,13 @@ No Git, Python, editor installation or account is needed for players.
 Source checkouts and existing portable packages can still run
 `START_BRASSLINE.bat`. See `START_HERE.txt` for controls and `HOSTING.txt` for hosting.
 
+## Audio update
+
+Recorded weapon reports, a sharper headshot crunch, varied footsteps/equipment,
+clearer distant gunfire, and a faint continuous background drone. Settings now
+separate gunfire, movement/equipment, hit/reward cues and background volume.
+The launcher downloads this update normally; saves and network protocol stay intact.
+
 ## New in 0.9.0
 
 - **86 permanent challenges** across 24 tracks: jump shots, airborne headshots,
@@ -110,5 +117,7 @@ Godot tests and optional Python process runners are included in `tests`.
 Python is only needed to run the developer test orchestrators, not to play.
 The portable ZIP builder verifies both Windows executable hashes and PE sections.
 
-All game art is built procedurally in code; sounds are original synthesized WAVs.
+All game art is built procedurally in code. Audio combines edited CC0 firearm/foley
+recordings with original designed effects and ambience; credits ship in
+`assets/audio/CREDITS.txt`. See [the audio update](docs/AUDIO_UPDATE.md).
 See `GODOT_LICENSES.txt` for the included engine's licenses.

@@ -427,8 +427,8 @@ func network_action(action: String, value: int = 0) -> void:
 func play_sound(key: String, volume: float) -> void:
 	if game.net.running and game.net.server and key not in ["rifle","pistol","sniper","head","hit","empty"]: game.net.audio_fx(net_slot,key,global_position,volume-7)
 	if locally_controlled: game.sound(key,volume)
-	elif not game.net.running: game.world_sound(key,global_position,volume-7)
-	elif game.net.server: game.world_sound(key,global_position,volume-7,false)
+	elif not game.net.running: game.world_sound(key,global_position,-16 if key in ["rifle","pistol","sniper"] else volume-7)
+	elif game.net.server: game.world_sound(key,global_position,-16 if key in ["rifle","pistol","sniper"] else volume-7,false)
 func simulate_movement(delta: float, move_input: Vector2, jump_press: bool, crouch_hold: bool, silent: bool = false, grounded_override: int = -1, aiming_override: int = -1) -> void:
 	set_crouch(crouch_hold)
 	var aiming = is_aiming() if aiming_override<0 else aiming_override==1
