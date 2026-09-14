@@ -38,6 +38,15 @@ jobs:
             Copy-Item -LiteralPath $file.path -Destination $dest
           }
           Invoke-GameImport $engine $runtime
+          # Run the mixer suite using the exact release runtime plus the test script.
+          New-Item -ItemType Directory -Path "$runtime/tests" -Force | Out-Null
+          Copy-Item ./tests/test_audio.gd "$runtime/tests/test_audio.gd"
+          $testLog = "$env:RUNNER_TEMP/brassline-audio-test.log"
+          $process = Start-Process -FilePath $engine -ArgumentList @('--headless', '--path', ('"' + $runtime + '"'), '--log-file', ('"' + $testLog + '"'), '--', '--audio-test') -PassThru
+          if (!$process.WaitForExit(60000)) { $process.Kill(); throw 'Audio test timed out.' }
+          $testOutput = Get-Content -LiteralPath $testLog -Raw
+          Write-Output $testOutput
+          if ($process.ExitCode -ne 0 -or $testOutput -match '(SCRIPT ERROR|FAIL )' -or $testOutput -notmatch 'AUDIO_RESULT 59/59') { throw 'Audio test failed.' }
           New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/brassline-ui" -Force | Out-Null
           Copy-Item ./dist/channel.json "$env:RUNNER_TEMP/brassline-ui/test-channel.json"
           ./launcher/Launcher.ps1 -Root "$env:RUNNER_TEMP/brassline-ui" -SmokeTest
