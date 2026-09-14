@@ -164,13 +164,18 @@ function Install-Engine([string]$Root, $Manifest, [string]$Seed) {
 function Invoke-GameImport([string]$Engine, [string]$Directory) {
     $log = Join-Path $Directory 'import.log'
     $process = Start-Process -FilePath $Engine -ArgumentList @('--headless', '--editor', '--import', '--path', ('"' + $Directory + '"'), '--log-file', ('"' + $log + '"'), '--quit') -PassThru -WindowStyle Hidden
-    if (!$process.WaitForExit(180000)) { $process.Kill(); throw 'Preparing the game timed out. Retry the update.' }
+    try {
+        if (!$process.WaitForExit(180000)) { throw 'Preparing the game timed out. Retry the update.' }
+    } finally {
+        # Closing the launcher during import must not leave an invisible engine running.
+        if (!$process.HasExited) { $process.Kill(); $process.WaitForExit() }
+    }
     if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $log) -or
-        (Get-Content -LiteralPath $log -Raw) -match '(SCRIPT ERROR|Parse Error|Failed to load script)') {
+        (Get-Content -LiteralPath $log -Raw) -match '(SCRIPT ERROR|Parse Error|Failed to load script|ERROR:)') {
         throw "The new build failed its first-run check. Your previous version is still available. Details: $log"
     }
 }
-function Install-Update([string]$Root, $Manifest, [string]$Seed) {
+function Install-Update([string]$Root, $Manifest, [string]$Seed, [switch]$Repair) {
     Assert-Manifest $Manifest
     $lock = Get-UpdateLock $Root
     $stage = $null
@@ -178,9 +183,17 @@ function Install-Update([string]$Root, $Manifest, [string]$Seed) {
         Assert-GameStopped $Root
         $old = $null
         try { $old = Get-Install $Root } catch { Write-Status 'Repairing the installed version information...' }
-        if ($old -and $old.Manifest.commit -eq $Manifest.commit -and (Test-Installed $old $Root)) {
+        if (!$Repair -and $old -and $old.Manifest.commit -eq $Manifest.commit -and (Test-Installed $old $Root)) {
             Write-Status 'Already up to date.' 100
             return
+        }
+        $rollbackInstall = $null
+        if ($old -and (Test-Installed $old $Root)) { $rollbackInstall = $old }
+        elseif ($old) {
+            try {
+                $fallback = Get-Install $Root -Previous
+                if ($fallback -and (Test-Installed $fallback $Root)) { $rollbackInstall = $fallback }
+            } catch { } # Repair can proceed even if the old rollback metadata is damaged.
         }
         Install-Engine $Root $Manifest $Seed
         $versions = Join-Path $Root 'versions'
@@ -231,10 +244,17 @@ function Install-Update([string]$Root, $Manifest, [string]$Seed) {
         }
         if (Test-Path -LiteralPath $config) { Copy-Item -LiteralPath $config -Destination (Join-Path $stage 'server.cfg') -Force }
         Write-Status 'Preparing sounds and shaders for this version...' 85
-        Invoke-GameImport (Get-EnginePath $Root $Manifest) $stage
+        try { Invoke-GameImport (Get-EnginePath $Root $Manifest) $stage }
+        catch {
+            $importLog = Join-Path $stage 'import.log'
+            if (Test-Path -LiteralPath $importLog) {
+                Copy-Item -LiteralPath $importLog -Destination (Join-Path $Root 'last-import.log') -Force
+            }
+            throw 'Game preparation failed. The installed version was kept. See last-import.log in Game folder.'
+        }
         Write-AtomicJson (Join-Path $stage '.brassline-manifest.json') $Manifest
         $previous = ''
-        if ($old) { $previous = $old.Id }
+        if ($rollbackInstall) { $previous = $rollbackInstall.Id }
         Write-AtomicJson (Join-Path $Root 'active.json') @{ current = $id; previous = $previous }
         $stage = $null
         # Remove only obsolete managed versions/cache objects after successful activation.
@@ -245,7 +265,7 @@ function Install-Update([string]$Root, $Manifest, [string]$Seed) {
         }
         $keep = @{}
         foreach ($file in $Manifest.files) { $keep[$file.sha256] = $true }
-        if ($old) { foreach ($file in $old.Manifest.files) { $keep[$file.sha256] = $true } }
+        if ($rollbackInstall) { foreach ($file in $rollbackInstall.Manifest.files) { $keep[$file.sha256] = $true } }
         foreach ($entry in @(Get-ChildItem -LiteralPath $cache -File)) {
             if ($entry.Name -match '^[a-f0-9]{64}$' -and !$keep.ContainsKey($entry.Name)) {
                 Remove-Item -LiteralPath $entry.FullName -Force -ErrorAction SilentlyContinue

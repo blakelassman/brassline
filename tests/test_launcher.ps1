@@ -61,8 +61,8 @@ try {
     [IO.Directory]::CreateDirectory((Join-Path $seed 'engine')) | Out-Null
     [IO.File]::WriteAllText((Join-Path $seed 'engine/Godot_v4.7.2-stable_win64.exe'), 'engine')
     [IO.File]::WriteAllText((Join-Path $seed 'engine/Godot_v4.7.2-stable_win64_console.exe'), 'console')
-    $profile = Join-Path $temp 'profile_v1.json'
-    [IO.File]::WriteAllText($profile, '{"level":37,"inventory":["gold"]}')
+    $testProfile = Join-Path $temp 'profile_v1.json'
+    [IO.File]::WriteAllText($testProfile, '{"level":37,"inventory":["gold"]}')
     $payload = @{
         'project.godot' = 'project'; 'main.tscn' = 'scene'; 'scripts/main.gd' = 'script v1';
         'assets/hit.wav' = 'audio'; 'assets/retired.wav' = 'old audio';
@@ -126,6 +126,12 @@ try {
     Install-Update $root $c $seed | Out-Null
     Assert ($script:downloads.Count -eq 1) 'Repair redownloads only damaged content'
     Assert (Test-Installed (Get-Install $root) $root) 'Repaired install is playable'
+    Assert ((Get-Install $root -Previous).Id -eq $second.Id) 'Repair preserves the last intact rollback version'
+    $beforeRepair = (Get-Install $root).Id
+    $script:downloads.Clear()
+    Install-Update $root $c $seed -Repair | Out-Null
+    Assert ((Get-Install $root).Id -ne $beforeRepair) 'Explicit repair rebuilds imported assets even with unchanged source'
+    Assert ($script:downloads.Count -eq 0) 'Rebuilding imported assets uses verified local files'
     $lock = Get-UpdateLock $root
     try { Must-Fail { Install-Update $root $c $seed } 'Concurrent updates are blocked' }
     finally { $lock.Dispose() }
@@ -151,7 +157,7 @@ try {
     $script:content[$script:ChannelUrl] = '{broken'
     Must-Fail { Get-Channel $root } 'Malformed channel leaves installed state alone'
     Assert (Test-Installed (Get-Install $root) $root) 'Offline play does not require the release service'
-    Assert ((Get-Content $profile -Raw) -eq '{"level":37,"inventory":["gold"]}') 'Unrelated player save is untouched'
+    Assert ((Get-Content $testProfile -Raw) -eq '{"level":37,"inventory":["gold"]}') 'Unrelated player save is untouched'
     Assert ((Get-Content (Join-Path $root 'server.cfg') -Raw) -eq 'private port and password') 'Hosting configuration remains outside release cleanup'
     Write-Host "`n$script:passed launcher checks passed."
 } finally { if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force } }

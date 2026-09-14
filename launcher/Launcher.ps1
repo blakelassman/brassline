@@ -86,14 +86,15 @@ function Start-Task([string]$Action, [bool]$Play = $false) {
     $script:jobFailed = $false
     $status.Text = 'Connecting to the update service...'
     Set-Busy $true
-    $script:job = Start-Job -ArgumentList @($script:corePath, $Root, $Seed, $Action) -ScriptBlock {
-        param($Core, $InstallRoot, $SeedRoot, $Task)
+    $script:job = Start-Job -ArgumentList @($script:corePath, $Root, $Seed, $Action, [bool]$SmokeTest) -ScriptBlock {
+        param($Core, $InstallRoot, $SeedRoot, $Task, $Testing)
         . $Core
         try {
             if ($Task -eq 'rollback') { Restore-Previous $InstallRoot; return }
-            $manifest = Get-Channel $InstallRoot
+            if ($Testing) { $manifest = Read-Json (Join-Path $InstallRoot 'test-channel.json'); Assert-Manifest $manifest }
+            else { $manifest = Get-Channel $InstallRoot }
             Write-Output ([pscustomobject]@{ Kind = 'channel'; Manifest = $manifest })
-            if ($Task -ne 'check') { Install-Update $InstallRoot $manifest $SeedRoot }
+            if ($Task -ne 'check') { Install-Update $InstallRoot $manifest $SeedRoot -Repair:($Task -eq 'repair') }
         } catch { Write-Output ([pscustomobject]@{ Kind = 'failure'; Message = $_.Exception.Message }) }
     }
 }
@@ -107,12 +108,12 @@ function Launch-Game([bool]$Dedicated = $false) {
         $form.Refresh()
         if (!(Test-Installed $local $Root)) { throw 'Some installed files are missing or damaged. Click Repair.' }
         $exe = Get-EnginePath $Root $local.Manifest
-        $args = @('--path', ('"' + $local.Path + '"'), '--log-file', ('"' + (Join-Path $Root 'brassline.log') + '"'))
+        $launchArguments = @('--path', ('"' + $local.Path + '"'), '--log-file', ('"' + (Join-Path $Root 'brassline.log') + '"'))
         if ($Dedicated) {
             Copy-Item -LiteralPath (Join-Path $Root 'server.cfg') -Destination (Join-Path $local.Path 'server.cfg') -Force
-            $args += @('--headless', '--', '--server')
+            $launchArguments += @('--headless', '--', '--server')
         }
-        Start-Process -FilePath $exe -ArgumentList $args -WorkingDirectory $local.Path | Out-Null
+        Start-Process -FilePath $exe -ArgumentList $launchArguments -WorkingDirectory $local.Path | Out-Null
         $status.Text = 'Game started. Close it before installing another update.'
     } catch { $status.Text = $_.Exception.Message }
     finally { if ($lock) { $lock.Dispose() } }
@@ -121,7 +122,7 @@ $primary.Add_Click({ Start-Task 'update' $true })
 $offline.Add_Click({ Launch-Game })
 $server.Add_Click({ Launch-Game $true })
 $check.Add_Click({ Start-Task 'check' })
-$repair.Add_Click({ Start-Task 'update' })
+$repair.Add_Click({ Start-Task 'repair' })
 $rollback.Add_Click({ Start-Task 'rollback' })
 $folder.Add_Click({ Start-Process explorer.exe -ArgumentList ('"' + $Root + '"') })
 $shortcut.Add_Click({
@@ -131,6 +132,7 @@ $shortcut.Add_Click({
         [IO.Directory]::CreateDirectory($bootstrapDir) | Out-Null
         foreach ($name in @('Bootstrap.ps1', 'Launcher.ps1', 'Core.ps1')) {
             $source = Join-Path (Join-Path $Seed 'launcher') $name
+            if (!(Test-Path -LiteralPath $source)) { $source = Join-Path $bootstrapDir $name }
             $dest = Join-Path $bootstrapDir $name
             if ([IO.Path]::GetFullPath($source) -ne [IO.Path]::GetFullPath($dest)) { Copy-Item -LiteralPath $source -Destination $dest -Force }
         }
@@ -148,6 +150,7 @@ $timer = New-Object Windows.Forms.Timer
 $timer.Interval = 200
 $timer.Add_Tick({
     if (!$script:job) { return }
+    $jobState = $script:job.State
     foreach ($event in @(Receive-Job $script:job -ErrorAction SilentlyContinue)) {
         switch ($event.Kind) {
             'channel' {
@@ -167,29 +170,29 @@ $timer.Add_Tick({
             }
         }
     }
-    if ($script:job.State -in @('Completed', 'Failed', 'Stopped')) {
+    if ($jobState -in @('Completed', 'Failed', 'Stopped')) {
         $success = !$script:jobFailed -and $script:job.State -eq 'Completed'
         if ($script:job.State -eq 'Failed') { $status.Text = 'Update worker stopped. Retry, or use Play installed.' }
         Remove-Job $script:job -Force
         $script:job = $null
         Set-Busy $false
-        if ($script:playAfter -and $success) { Launch-Game }
+        if ($SmokeTest) {
+            $script:smokePassed = $success -and $null -ne $script:latest
+            $status.Text = 'Ready. Your next match is one click away.'
+            $primary.Text = 'PLAY'
+            $bitmap = New-Object Drawing.Bitmap($form.Width, $form.Height)
+            try { $form.DrawToBitmap($bitmap, (New-Object Drawing.Rectangle(0, 0, $form.Width, $form.Height))); $bitmap.Save((Join-Path $Root 'launcher-preview.png')) }
+            finally { $bitmap.Dispose() }
+            $form.Close()
+        } elseif ($script:playAfter -and $success) { Launch-Game }
     }
 })
-$form.Add_Shown({
-    Refresh-Install
-    if ($SmokeTest) {
-        $installed.Text = 'Installed: 0.9.0'; $available.Text = 'Available: 0.9.0'
-        $status.Text = 'Ready. Your next match is one click away.'
-        $primary.Text = 'PLAY'
-        $bitmap = New-Object Drawing.Bitmap($form.Width, $form.Height)
-        try { $form.DrawToBitmap($bitmap, $form.ClientRectangle); $bitmap.Save((Join-Path $Root 'launcher-preview.png')) }
-        finally { $bitmap.Dispose() }
-        $form.Close()
-    } else { Start-Task 'check' }
-})
+$script:smokePassed = $false
+$form.Add_Shown({ Refresh-Install; Start-Task 'check' })
 $form.Add_FormClosing({
     if ($script:job) { Stop-Job $script:job; Remove-Job $script:job -Force; $script:job = $null }
 })
 try { $timer.Start(); [Windows.Forms.Application]::Run($form) }
 finally { $timer.Dispose(); $form.Dispose(); $instanceLock.Dispose() }
+
+if ($SmokeTest -and !$script:smokePassed) { throw 'Launcher worker/UI smoke test failed.' }
