@@ -7,3 +7,5 @@ engine/
 *.wav.import
 __pycache__/
 *.pyc
+
+dist/

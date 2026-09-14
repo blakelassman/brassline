@@ -1,5 +1,9 @@
 BRASSLINE 0.9.0 - CHALLENGES & LOCKER UPDATE
 
+NEW: BRASSLINE_LAUNCHER.bat installs a separate, automatically updatable copy.
+Click Install & Play once, then Update & Play for future versions. Optional:
+Desktop shortcut. Existing engine and saves are reused. See docs/LAUNCHER.md.
+
 EVERYONE MUST UPDATE: this build uses a new network protocol.
 Update the source checkout or extract a complete package. Keep UDP 27020 and your existing port rule.
 Your saved level and settings carry over automatically on the same Windows user.
