@@ -104,7 +104,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if locally_controlled and health>0 and not game.menu_open and game.net.is_destroy() and event.is_action_pressed("drop_bomb"):
 		if game.net.server: game.net.destroy.drop(net_slot)
 		else: game.net._drop_bomb.rpc_id(1,life_id)
-	if not locally_controlled or not game.active or game.menu_open or health<=0:
+	if not locally_controlled or not game.active or game.menu_open or game.replays.active or health<=0:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var mouse_motion = event.screen_relative if not event.screen_relative.is_zero_approx() else event.relative
@@ -423,6 +423,7 @@ func reset_at(pos: Vector3) -> void:
 	viewmodel.update_pose(0.0)
 
 func held(action: String) -> bool:
+	if locally_controlled and game.replays.active: return false
 	if not locally_controlled: return bool(net_controls.get(action,false))
 	return not game.menu_open and Input.is_action_pressed(action)
 func movement_input() -> Vector2:

@@ -33,7 +33,7 @@ func _ready() -> void:
 	var top = HBoxContainer.new()
 	shell.add_child(top)
 	label(top,"BRASSLINE",46,ink).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label(top,"MULTIPLAYER  /  0.10.0",15,gold)
+	label(top,"MULTIPLAYER  /  0.11.0",15,gold)
 	var columns = HBoxContainer.new()
 	columns.add_theme_constant_override("separation",32)
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -197,6 +197,17 @@ func _build_settings(page: VBoxContainer) -> void:
 	scroll.add_child(rows)
 	_slider(rows,"Mouse sensitivity","sensitivity",.0003,.012,.0001)
 	label(rows,"Scope sensitivity automatically follows your field of view.",14,muted)
+	var cams = CheckButton.new()
+	cams.text = "Death killcams (skippable)"
+	cams.button_pressed = game.prefs.data.killcams
+	rows.add_child(cams)
+	cams.toggled.connect(func(enabled):
+		game.prefs.data.killcams=enabled
+		if game.net.running:
+			if game.net.server: game.net.peers[1].killcams=enabled
+			else: game.net._replay_settings.rpc_id(1,enabled)
+		_settings_changed())
+	label(rows,"Final killcams always play. Skip death replays with your jump key.",14,muted)
 	label(rows,"AUDIO",13,muted)
 	_slider(rows,"Master volume","volume",0,1,.01)
 	_slider(rows,"Gunfire & explosions","weapons_volume",0,1,.01)

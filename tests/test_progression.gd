@@ -16,6 +16,7 @@ func fresh() -> RefCounted:
 	p.reset_roster(true)
 	return p
 func run(game: Node) -> void:
+	game.prefs.data.killcams=false
 	var p = fresh()
 	check(p.roster.size()==10 and p.level_for("YOU")==1,"Ten real player profiles start at level one")
 	check(p.record("YOU","ENEMY 1",1,false,false,0,1,false)==50,"Normal kill awards 50")

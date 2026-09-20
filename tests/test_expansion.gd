@@ -11,6 +11,7 @@ func frames(n: int) -> void:
 	for i in range(n): await get_tree().physics_frame
 	await get_tree().process_frame
 func run(game: Node) -> void:
+	game.prefs.data.killcams=false
 	await frames(3)
 	check(game.Maps.NAMES.size()==4,"Original Foundry plus three selectable maps")
 	var surfaces: Dictionary = {}
