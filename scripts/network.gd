@@ -8,7 +8,7 @@ const Preferences = preload("res://scripts/preferences.gd")
 const LagCompensation = preload("res://scripts/lag_compensation.gd")
 var lag_comp = LagCompensation.new()
 var lag_rescued_hits = 0
-const PROTOCOL = 12
+const PROTOCOL = 13
 var replay_wait: Dictionary = {}
 var final_replay_until = 0.0
 var mode_id = "tdm"
@@ -669,7 +669,7 @@ func _spawn(at: Vector3, life: int, joined_slot: int = -1, spawn_health: int = 1
 	for grenade in predicted_grenades.values():
 		if is_instance_valid(grenade): grenade.queue_free()
 	predicted_grenades.clear()
-	if game.replays.active: game.replays.stop(false)
+	if game.replays.active or game.replays.transitioning(): game.replays.stop(false)
 	game.player.life_id = life
 	game.player.reset_at(at)
 	game.player.health = spawn_health
@@ -1162,9 +1162,10 @@ func _broadcast_final_replay() -> void:
 	game.replays.flush()
 	var clip=game.replays.history.last_clip
 	if clip.is_empty(): return
+	clip["result_title"] = destroy.reason if is_destroy() else winner
 	var packed=game.replays.History.encode(clip)
 	if packed.is_empty(): return
-	if not dedicated: game.replays.play(clip,true)
+	if not dedicated: game.replays.present_final(clip,clip.result_title)
 	for id in peers:
 		if id!=1 and can_send(id) and peers[id].loaded: _replay_clip.rpc_id(id,packed,true,round_number,slots[peers[id].slot].actor.life_id)
 @rpc("authority","call_remote","reliable",2)
@@ -1178,7 +1179,8 @@ func _replay_clip(packed: PackedByteArray, mandatory: bool, generation: int, vie
 		game.player.health=0; game.player.collision_layer=0
 		for area in game.player.hitboxes: area.collision_layer=0
 		pending_reconciliation.clear(); inputs.clear(); actions.clear()
-	game.replays.play(clip,mandatory)
+	if mandatory: game.replays.present_final(clip,clip.get("result_title","ROUND COMPLETE"))
+	else: game.replays.play(clip,false)
 func finish_death_replay() -> void:
 	if not running: return
 	if server: _complete_replay(1,game.player.life_id)

@@ -33,7 +33,7 @@ func _ready() -> void:
 	var top = HBoxContainer.new()
 	shell.add_child(top)
 	label(top,"BRASSLINE",46,ink).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label(top,"MULTIPLAYER  /  0.11.0",15,gold)
+	label(top,"MULTIPLAYER  /  0.12.0",15,gold)
 	var columns = HBoxContainer.new()
 	columns.add_theme_constant_override("separation",32)
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -140,7 +140,7 @@ func _build_online(page: VBoxContainer) -> void:
 	label(page,"GAME MODE",13,muted)
 	var mode_picker = OptionButton.new()
 	mode_picker.add_item("TEAM DEATHMATCH • 250 kills / 10 minutes")
-	mode_picker.add_item("DESTROY AND DIFFUSE • First to 3 / one life per round")
+	mode_picker.add_item("DESTROY AND DIFFUSE • First to 6 / one life per round")
 	mode_picker.selected = 1 if game.prefs.data.online_mode=="destroy" else 0
 	mode_picker.item_selected.connect(func(index): game.prefs.data.online_mode = "destroy" if index==1 else "tdm"; game.prefs.dirty = true)
 	mode_picker.custom_minimum_size.y = 42

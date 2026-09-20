@@ -5,7 +5,7 @@ Server. Joining still uses a public IP/hostname, UDP port and optional password.
 Both ends select the same mode; a mismatch gives a specific error. This update
 does not add a global matchmaking directory. TDM remains a separate selection.
 
-Everyone updates through the launcher. Network protocol is now **11**; old
+Everyone updates through the launcher. Network protocol is now **13**; old
 clients cannot join. Your profile, XP, inventory and existing UDP rule carry over.
 Dedicated hosts set `mode="destroy"` in their existing `server.cfg`; omitted mode
 continues to mean TDM. The launcher preserves your server configuration.
@@ -14,7 +14,7 @@ continues to mean TDM. The launcher preserves your server configuration.
 
 - Ten slots, five per team. Humans replace bots, joining the team with fewer
   humans. Bots fill every remaining slot and can kill, carry, plant and defuse.
-- **Best of five: first team to three round wins.** Roles switch after round two.
+- **Best of eleven: first team to six round wins.** Roles switch after round five.
   Blue begins attacking; red attacks from round three. Team scores stay with
   their team. A deciding fifth round uses the post-halftime roles.
 - **120 seconds per round.** A completed plant starts a separate **60-second**

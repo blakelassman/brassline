@@ -157,7 +157,7 @@ func _ready() -> void:
 		call_deferred("_self_test")
 	elif Array(args).any(func(arg): return arg.begins_with("--capture")):
 		call_deferred("_capture")
-	print("BRASSLINE ready | multiplayer prototype 0.11.0 | Godot ", Engine.get_version_info()["string"])
+	print("BRASSLINE ready | multiplayer prototype 0.12.0 | Godot ", Engine.get_version_info()["string"])
 
 func _training_targets() -> void:
 	var names = ["WALL PEEK","STRAFE","HIGH GROUND","CLOSE RANGE","TEAMMATE","COLLATERAL A","COLLATERAL B"]
@@ -682,7 +682,7 @@ func _capture() -> void:
 		player.pitch = -.08
 		player.camera.rotation.x = player.pitch
 		net.destroy.carrier = 0
-	if "--capture-killcam" in modes or "--capture-final-scope" in modes:
+	if "--capture-killcam" in modes or "--capture-final-scope" in modes or "--capture-round-outro" in modes:
 		await start_mode("combat")
 		for actor in combat.actors(): actor.set_physics_process(false)
 		player.reset_at(Vector3(-5,.05,20))
@@ -699,10 +699,14 @@ func _capture() -> void:
 		replays.history.shot(self,player,player.camera.global_position,victim.position+Vector3.UP*1.64,player.weapon)
 		replays.flush()
 		await get_tree().process_frame
-		replays.play(replays.history.last_clip,true)
 		replays.set_process(false)
-		replays.cursor=replays.clip.time-.2
-		replays.advance(0)
+		if "--capture-round-outro" in modes:
+			replays.present_final(replays.history.last_clip,"ROUND WON")
+		else:
+			replays.play(replays.history.last_clip,true)
+			replays.elapsed=1.0
+			replays.cursor=replays.clip.time-.2
+			replays.advance(0)
 	if "--capture-client" in modes:
 		net.join("127.0.0.1",27020,"")
 		var deadline = Time.get_ticks_msec()+10000

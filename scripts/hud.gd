@@ -10,12 +10,18 @@ var font: Font
 var ink = Color("f4ecd7")
 var gold = Color("f1bd58")
 var dim = Color("acc0c5")
+var replay_fade: ColorRect
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	font = ThemeDB.fallback_font
 	_build_menu()
+	replay_fade=ColorRect.new()
+	replay_fade.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	replay_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(replay_fade)
+	replay_fade.color=Color(0,0,0,0)
 
 func _build_menu() -> void:
 	menu = preload("res://scripts/menu.gd").new()
@@ -75,8 +81,9 @@ func _label(parent: Node, text: String, size: int, color: Color) -> void:
 
 func _process(_delta: float) -> void:
 	if game.challenges.update(_delta,game.active and not game.menu_open): game.sound("achievement",-15)
+	replay_fade.color=Color(0,0,0,0 if game.menu_open else game.replays.fade_alpha())
 	queue_redraw()
-	vote_panel.visible = game.net.running and not game.net.round_active and not game.menu_open and not game.replays.active and game.clock>=game.net.final_replay_until
+	vote_panel.visible = game.net.running and not game.net.round_active and not game.menu_open and not game.replays.active and not game.replays.transitioning() and game.clock>=game.net.final_replay_until
 	if vote_panel.visible:
 		vote_label.text = "%s\nBLUE %d  /  RED %d\n%s" % [game.net.winner,game.combat.scores[1],game.combat.scores[2],"LOADING NEXT ARENA…" if game.net.loading_round else "VOTE NEXT MAP  /  %ds" % maxi(0,ceili(game.net.vote_end-game.clock))]
 		for index in range(4):
@@ -100,6 +107,12 @@ func _draw() -> void:
 	var h = size.y
 	if not game.active or game.menu_open:
 		draw_rect(Rect2(Vector2.ZERO,size),Color(0.04,0.10,0.13,0.76))
+		return
+	if game.replays.transitioning():
+		draw_rect(Rect2(Vector2.ZERO,size),Color(0,0,0,.24))
+		centered(game.replays.outro_title,size.y*.4,34,gold)
+		centered("%d  :  %d" % [game.combat.scores[1],game.combat.scores[2]],size.y*.4+46,26,ink)
+		centered("FINAL KILL REPLAY",size.y*.4+80,14,dim)
 		return
 	if game.replays.active:
 		_draw_killcam()
@@ -227,7 +240,7 @@ func _draw_scoreboard() -> void:
 	draw_rect(Rect2(x,y,840,604),Color("132b34"))
 	draw_rect(Rect2(x,y,840,3),gold)
 	text_at("SCOREBOARD",Vector2(x+28,y+40),27,ink)
-	text_at("DESTROY / FIRST TO 3" if game.net.is_destroy() else ("TDM / FIRST TO 250" if game.mode=="online" else ("ENDLESS 5v5" if game.mode=="combat" else "AIM TRAINING")),Vector2(x+565,y+38),17,gold)
+	text_at("DESTROY / FIRST TO 6" if game.net.is_destroy() else ("TDM / FIRST TO 250" if game.mode=="online" else ("ENDLESS 5v5" if game.mode=="combat" else "AIM TRAINING")),Vector2(x+565,y+38),17,gold)
 	for col in [["PLAYER",40],["LEVEL",378],["KILLS",493],["DEATHS",587],["TOTAL XP",683]]:
 		text_at(col[0],Vector2(x+col[1],y+77),12,dim)
 	for team in [1,2]:
@@ -311,8 +324,8 @@ func _draw_objective() -> void:
 	var attacking = info.attackers==game.player.team
 	var seconds = maxi(0,ceili(info.deadline-game.clock))
 	var role = "ATTACK" if attacking else "DEFEND"
-	centered("ROUND %d / 5  •  %s  •  %02d:%02d" % [info.round,role,seconds/60,seconds%60],67,14,gold if info.phase=="planted" else dim)
-	centered("%d ALIVE     FIRST TO 3     %d ALIVE" % [info.alive[1],info.alive[2]],86,12,dim)
+	centered("ROUND %d / 11  •  %s  •  %02d:%02d" % [info.round,role,seconds/60,seconds%60],67,14,gold if info.phase=="planted" else dim)
+	centered("%d ALIVE     FIRST TO 6     %d ALIVE" % [info.alive[1],info.alive[2]],86,12,dim)
 	for i in range(2):
 		var at = radar_point(d.SITES[i])
 		draw_arc(at,10,0,TAU,24,gold,2,true)
@@ -364,8 +377,8 @@ func _draw_killcam() -> void:
 	centered(str(info[0])+"  →  "+str(victim),size.y-78,22,ink)
 	centered(replay.clip.weapon+("  •  HEADSHOT" if replay.clip.head else ""),size.y-54,14,gold)
 	centered("FINAL KILL REPLAY • CANNOT SKIP" if replay.final else "PRESS "+binding_name("jump")+" TO SKIP",size.y-28,13,dim)
-	var length=maxf(.01,replay.clip.time-replay.clip.frames[0][0])
-	draw_rect(Rect2(12,size.y-112,(size.x-24)*clampf((replay.cursor-replay.clip.frames[0][0])/length,0,1),3),red)
+	var length=replay.FINAL_PRE_ROLL if replay.final else replay.REGULAR_PRE_ROLL
+	draw_rect(Rect2(12,size.y-112,(size.x-24)*clampf((replay.cursor-(replay.clip.time-length))/length,0,1),3),red)
 	if not replay.scoped:
 		var at=size*.5
 		for dir in [Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN]: draw_line(at+dir*5,at+dir*11,ink,1.5)

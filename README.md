@@ -1,4 +1,4 @@
-# BRASSLINE 0.11.0
+# BRASSLINE 0.12.0
 
 A free Windows Godot FPS prototype with movement-focused combat, offline practice,
 and self-hosted internet multiplayer.
@@ -24,7 +24,14 @@ No Git, Python, editor installation or account is needed for players.
 Source checkouts and existing portable packages can still run
 `START_BRASSLINE.bat`. See `START_HERE.txt` for controls and `HOSTING.txt` for hosting.
 
-## New: Killcams
+## New: Smoother rounds and longer matches
+
+Destroy and Diffuse is now **first to six**, with sides switching after round
+five. Round endings show the result briefly, then fade into the final replay.
+Normal killcams consistently last 3.65 seconds; finals last 6.75 seconds and
+fade back to the result screen. Skipping normal killcams still works.
+
+## Killcams
 
 Watch the attacker's first-person view after a death. Press your **Jump** binding
 (Space or scroll down by default) to skip: TDM respawns you immediately, while
@@ -35,14 +42,14 @@ Every online TDM match and Destroy round with a recorded kill ends with a
 **non-skippable final killcam**, slowing the finishing moment to quarter speed.
 Scoped views, weapon finishes, actual shot traces, headshot feedback and
 collateral victims are replayed before the next round or map vote.
-Everyone must update to protocol **12**; existing saves stay intact.
+Everyone must update to protocol **13**; existing saves stay intact.
 [Replay behavior and verification](docs/KILLCAMS.md).
 
 ## Destroy and Diffuse
 
 Online → Game mode now selects TDM or **Destroy and Diffuse**. Competitive 5v5,
-with bots filling empty slots, one bomb, A/B sites, first to three round wins,
-a side switch after round two, and no mid-round respawns. Round timer: 2 minutes;
+with bots filling empty slots, one bomb, A/B sites, first to six round wins,
+a side switch after round five, and no mid-round respawns. Round timer: 2 minutes;
 planted bomb: 60 seconds; defuse: 8 seconds. Hold E to plant/defuse, X to drop,
 V to cycle teammates while spectating. Every action is rebindable.
 
@@ -76,7 +83,7 @@ The launcher downloads this update normally; saves and network protocol stay int
   Rarity odds: Field 70%, Signal 22%, Elite 6%, Mythic 1.75%, Special **0.25%
   (1 in 400 per opening)**. No purchases, keys, trading or cash value.
 
-The 0.9.0 release introduced network protocol **10** (superseded by 11). Existing XP, display and
+The 0.9.0 release introduced network protocol **10** (superseded by 13). Existing XP, display and
 keybind settings carry over. Challenges and inventory persist on the same Windows
 user profile. See `docs/UPDATE_0_9.md` for behavior and verification details.
 

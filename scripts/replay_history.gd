@@ -2,8 +2,8 @@ extends RefCounted
 ## Bounded server/offline presentation history. No playback code mutates combat.
 const Player = preload("res://scripts/player.gd")
 const Bot = preload("res://scripts/bot.gd")
-const PRE_ROLL = 3.0
-const MAX_FRAMES = 76
+const PRE_ROLL = 4.0
+const MAX_FRAMES = 96
 const MAX_EVENTS = 512
 const MAX_PACKET = 131072
 const MAX_DECODED = 524288
