@@ -38,6 +38,20 @@ func load_profile() -> void:
 	var valid: Dictionary = {}
 	for action in DEFAULT_KEYS:
 		var values = data.bindings.get(action,DEFAULT_KEYS[action])
+		# New actions must not steal a key from a player's existing custom binds.
+		if not data.bindings.has(action):
+			var occupied: Array = []
+			for codes in data.bindings.values():
+				if codes is Array:
+					for code in codes:
+						if code is int or code is float: occupied.append(int(code))
+			for codes in valid.values(): occupied.append_array(codes)
+			values = DEFAULT_KEYS[action].filter(func(code): return code not in occupied)
+			if values.is_empty():
+				for code in [KEY_F6,KEY_F7,KEY_F8,KEY_F9,KEY_F11,KEY_F12]:
+					if code not in occupied:
+						values = [code]
+						break
 		valid[action] = []
 		if values is Array:
 			for code in values.slice(0,2):

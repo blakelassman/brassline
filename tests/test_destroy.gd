@@ -45,6 +45,16 @@ func run(g: Node) -> void:
 	if game.net.running: await game.net.leave()
 	get_tree().quit(0 if failures.is_empty() else 1)
 func rules_test() -> void:
+	var profile_path = "user://destroy_binding_%d.json" % Time.get_ticks_usec()
+	var prefs = game.Preferences.new(profile_path)
+	for action in ["interact","drop_bomb","spectate_next"]: prefs.data.bindings.erase(action)
+	prefs.data.bindings.fire = [KEY_E]
+	prefs.save()
+	var migrated = game.Preferences.new(profile_path)
+	migrated.load_profile()
+	check(migrated.data.bindings.fire==[KEY_E] and KEY_E not in migrated.data.bindings.interact,"New objective actions preserve existing custom key bindings")
+	check(not migrated.data.bindings.interact.is_empty() and migrated.data.bindings.interact!=migrated.data.bindings.drop_bomb,"Conflicting new bindings receive distinct free fallback keys")
+	DirAccess.remove_absolute(profile_path)
 	check(await game.net.host(27926,"",false,"destroy"),"Destroy host starts with real objective layout")
 	var net = game.net
 	var d = net.destroy
