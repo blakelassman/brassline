@@ -1,4 +1,4 @@
-# BRASSLINE 0.9.0
+# BRASSLINE 0.10.0
 
 A free Windows Godot FPS prototype with movement-focused combat, offline practice,
 and self-hosted internet multiplayer.
@@ -24,6 +24,20 @@ No Git, Python, editor installation or account is needed for players.
 Source checkouts and existing portable packages can still run
 `START_BRASSLINE.bat`. See `START_HERE.txt` for controls and `HOSTING.txt` for hosting.
 
+## New: Destroy and Diffuse
+
+Online → Game mode now selects TDM or **Destroy and Diffuse**. Competitive 5v5,
+with bots filling empty slots, one bomb, A/B sites, first to three round wins,
+a side switch after round two, and no mid-round respawns. Round timer: 2 minutes;
+planted bomb: 60 seconds; defuse: 8 seconds. Hold E to plant/defuse, X to drop,
+V to cycle teammates while spectating. Every action is rebindable.
+
+Bots plant, recover the bomb, defend and defuse across four objective districts
+with multiple approaches and upper floors. Matches finish with map voting.
+Choose the same mode when hosting/joining by IP; there is no global matchmaking
+service. Everyone must update (protocol **11**); your existing saves remain.
+[Rules, maps, hosting and verification](docs/DESTROY_AND_DIFFUSE.md).
+
 ## Audio update
 
 Recorded weapon reports, a sharper headshot crunch, varied footsteps/equipment,
@@ -48,7 +62,7 @@ The launcher downloads this update normally; saves and network protocol stay int
   Rarity odds: Field 70%, Signal 22%, Elite 6%, Mythic 1.75%, Special **0.25%
   (1 in 400 per opening)**. No purchases, keys, trading or cash value.
 
-Everyone must update together (network protocol **10**). Existing XP, display and
+The 0.9.0 release introduced network protocol **10** (superseded by 11). Existing XP, display and
 keybind settings carry over. Challenges and inventory persist on the same Windows
 user profile. See `docs/UPDATE_0_9.md` for behavior and verification details.
 

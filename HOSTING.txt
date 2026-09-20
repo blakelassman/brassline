@@ -1,10 +1,10 @@
-BRASSLINE 0.7.1 - HOSTING OVER THE INTERNET
+BRASSLINE 0.10.0 - HOSTING OVER THE INTERNET
 No paid service is required. Your PC runs the server while friends play.
 
 EASIEST SETUP: HOST & PLAY
-1. Everyone extracts the same 0.7.1 ZIP and runs START_BRASSLINE.bat.
+1. Everyone uses Update & Play in the launcher (same game version).
 2. On your PC, choose the first map under PLAY. Open ONLINE.
-3. Choose your name, leave the port at 27020, and optionally set a password.
+3. Select TDM or Destroy and Diffuse. Choose your name, UDP port and password.
 4. Click HOST & PLAY. The address field is used only when joining.
 5. In your router, forward UDP port 27020 to your gaming PC's local IPv4
    address, using internal port 27020 as well. Reserve that local IP in the
@@ -13,7 +13,7 @@ EASIEST SETUP: HOST & PLAY
    network profile you actually use. If using an explicit inbound rule,
    allow that program's UDP traffic on the game port.
 7. Give friends your router's PUBLIC IPv4 address, port, and optional password.
-   Friends enter those in ONLINE and click JOIN SERVER.
+   Friends select the same game mode, enter those in ONLINE and click JOIN SERVER.
 
 There is no Wi-Fi password involved. Do not put http:// in the address field.
 If you choose another port, use that same UDP port in the game and router rule.
@@ -29,7 +29,7 @@ WHICH ADDRESS?
 You can find your PC's local IPv4 by opening Command Prompt and typing ipconfig.
 
 IF FRIENDS CANNOT JOIN
-- Confirm the server is actually running, and all players have version 0.7.1.
+- Confirm the server is actually running, and all players have version 0.10.0.
 - Check that the port rule is UDP and points at this PC's current local IPv4.
 - Check Windows Firewall and the exact password, if you set one.
 - Recheck your public IP; some home connections change it periodically.
@@ -42,7 +42,7 @@ IF FRIENDS CANNOT JOIN
 
 OPTIONAL: DEDICATED SERVER ON YOUR PC
 Use this if you want the server in its own console instead of inside your game.
-1. Open server.cfg in Notepad and choose port, optional password and first map.
+1. Open server.cfg and choose mode="tdm" or mode="destroy", port, password and map.
 2. Run START_DEDICATED_SERVER.bat; leave its window open.
 3. Run START_BRASSLINE.bat separately and JOIN 127.0.0.1 with the configured port.
 4. Friends still join your PUBLIC IP with that same port.
@@ -51,7 +51,14 @@ The dedicated console has no human player, so it starts with ten bots and can
 accept ten humans. Its server profile is separate from your player's save.
 Closing the console stops the server. Players retain their last confirmed XP.
 
-MATCH RULES
+DESTROY AND DIFFUSE
+First to 3 round wins. 120-second rounds, 60-second bomb, 8-second defuse.
+Switch sides after round two; dead players spectate until the next round.
+Bots fill the roster and plant/defuse. Joining inherits the bot's current life.
+Existing humans rebalance at round boundaries after departures. Map vote after
+the match. Full details: docs/DESTROY_AND_DIFFUSE.md.
+
+TDM MATCH RULES
 5 blue slots and 5 red slots. Human counts differ by at most one when filling.
 Bots occupy all unused slots. Leaving players get bot replacements; if humans
 become uneven by more than one, a player moves teams with XP/K/D preserved.

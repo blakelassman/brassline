@@ -56,13 +56,14 @@ func take_damage(amount: int, source_team: int) -> bool:
 	if killed:
 		dead_time = 0.0
 		opponent = null
-		reset.call_deferred()
+		if not game.net.is_destroy(): reset.call_deferred()
 	return killed
 
 func reset() -> void:
 	if game.mode not in ["combat","online"] or is_queued_for_deletion():
 		return
 	life_id += 1
+	if has_meta("replacement_inventory"): remove_meta("replacement_inventory")
 	anchor = combat.choose_spawn(team,self)
 	super.reset()
 	reaction = rng.randf_range(profile.reaction,profile.reaction+.35)
@@ -78,7 +79,7 @@ func reset() -> void:
 	combat.respawns += 1
 
 func _physics_process(delta: float) -> void:
-	if not game.active or (game.net.running and not game.net.round_active) or game.mode not in ["combat","online"]:
+	if not game.active or (game.net.running and not game.net.combat_allowed()) or game.mode not in ["combat","online"]:
 		return
 	if health<=0:
 		return
@@ -99,7 +100,10 @@ func _physics_process(delta: float) -> void:
 		acquire_target()
 	var visible_enemy = is_instance_valid(opponent) and opponent.health>0 and combat.sight_clear(global_position+Vector3.UP*1.38,opponent.global_position+Vector3.UP*1.05)
 	var movement = Vector3.ZERO
-	if visible_enemy:
+	var objective = game.net.destroy if game.net.is_destroy() else null
+	var interacting = objective!=null and (objective.holding(net_slot) or objective.bot_wants(self))
+	var urgent = objective!=null and objective.bot_priority(self)
+	if visible_enemy and not interacting:
 		seen_position = opponent.global_position
 		memory_time = 2.0
 		reaction = maxf(0,reaction-delta)
@@ -120,6 +124,7 @@ func _physics_process(delta: float) -> void:
 			movement = Vector3(offset.z,0,-offset.x).normalized()*strafe_sign*profile.strafe
 			if distance<profile.near or reload_time>0:
 				movement -= offset.normalized()*1.4
+		if urgent: movement = route_toward(objective.bot_goal(self),delta)
 		if reaction<=0 and shot_timer<=0 and reload_time<=0:
 			combat.shoot_bot(self,opponent.global_position+Vector3.UP*1.02)
 			rounds -= 1
@@ -132,16 +137,19 @@ func _physics_process(delta: float) -> void:
 				game.world_sound("mag_out",global_position,-25)
 	else:
 		reaction = rng.randf_range(profile.reaction,profile.reaction+.35)
-		if memory_time>0:
+		if objective!=null:
+			goal = objective.bot_goal(self)
+		elif memory_time>0:
 			goal = seen_position
 		elif global_position.distance_to(goal)<2 or path.is_empty():
 			goal = combat.patrol_goal()
 		movement = route_toward(goal,delta)
 		if movement.length()>.1:
 			look_at(global_position+movement,Vector3.UP,true)
+	if interacting: movement = Vector3.ZERO
 	# Local separation prevents a group from choosing the same walking line.
 	for actor in combat.actors():
-		if actor == self or actor.health<=0 or absf(actor.global_position.y-global_position.y)>1.5:
+		if interacting or actor == self or actor.health<=0 or absf(actor.global_position.y-global_position.y)>1.5:
 			continue
 		var away = global_position-actor.global_position
 		away.y = 0

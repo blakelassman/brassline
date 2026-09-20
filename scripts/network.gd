@@ -8,7 +8,12 @@ const Preferences = preload("res://scripts/preferences.gd")
 const LagCompensation = preload("res://scripts/lag_compensation.gd")
 var lag_comp = LagCompensation.new()
 var lag_rescued_hits = 0
-const PROTOCOL = 10
+const PROTOCOL = 11
+var mode_id = "tdm"
+var destroy = preload("res://scripts/destroy_mode.gd").new()
+func is_destroy() -> bool: return running and mode_id=="destroy"
+func combat_allowed() -> bool:
+	return round_active and (not is_destroy() or (destroy.fighting() if server else destroy.remote.get("phase","") in ["live","planted"]))
 var game: Node
 var running = false
 var server = false
@@ -54,6 +59,7 @@ var tick_window = 0
 var presentation_time = 0.0
 var presentation_ready = false
 func _process(delta: float) -> void:
+	destroy.view_tick(delta)
 	if not is_client_ready() or snapshot_arrival==0: return
 	var target = remote_time()-interpolation_delay()
 	if not presentation_ready or absf(target-presentation_time)>1:
@@ -76,6 +82,7 @@ func consume_reconciliation() -> void:
 	_reconcile(state[0],state[1])
 
 func _ready() -> void:
+	destroy.setup(self)
 	process_physics_priority = 100
 	multiplayer.server_relay = false
 	multiplayer.connected_to_server.connect(_connected)
@@ -92,7 +99,7 @@ func actors() -> Array:
 	for slot in slots:
 		if is_instance_valid(slot.get("actor")): result.append(slot.actor)
 	return result
-func host(port: int, secret: String, headless: bool = false) -> bool:
+func host(port: int, secret: String, headless: bool = false, selected_mode: String = "tdm") -> bool:
 	if running or game.changing_map: return false
 	var transport = ENetMultiplayerPeer.new()
 	var error = transport.create_server(port,16,3)
@@ -103,6 +110,7 @@ func host(port: int, secret: String, headless: bool = false) -> bool:
 	running = true
 	server = true
 	dedicated = headless
+	mode_id = "destroy" if selected_mode=="destroy" else "tdm"
 	game.combat.scores = [0,0,0]
 	round_number = 1
 	round_active = true
@@ -129,10 +137,12 @@ func host(port: int, secret: String, headless: bool = false) -> bool:
 	session_ready = true
 	round_active = true
 	round_end = game.clock+TIME_LIMIT
+	if is_destroy(): destroy.start_match()
 	print("SERVER_READY port=",port," actors=",actors().size()," dedicated=",dedicated)
 	return true
-func join(address: String, port: int, secret: String) -> void:
+func join(address: String, port: int, secret: String, selected_mode: String = "tdm") -> void:
 	if running or game.changing_map: return
+	mode_id = "destroy" if selected_mode=="destroy" else "tdm"
 	address = address.strip_edges()
 	if address.is_empty() or address.length()>253:
 		status = "Enter the host's public IP address or hostname."
@@ -151,20 +161,23 @@ func join(address: String, port: int, secret: String) -> void:
 	connect_started = Time.get_ticks_msec()
 	status = "Connecting to %s:%d…" % [address,port]
 func _connected() -> void:
-	_hello.rpc_id(1,PROTOCOL,password,game.prefs.data.name,int(game.prefs.data.xp))
+	_hello.rpc_id(1,PROTOCOL,password,game.prefs.data.name,int(game.prefs.data.xp),mode_id)
 @rpc("any_peer","call_remote","reliable",0)
-func _hello(protocol: int, secret: String, nickname: String, xp: int) -> void:
+func _hello(protocol: int, secret: String, nickname: String, xp: int, requested_mode: String = "tdm") -> void:
 	if not server: return
 	var id = multiplayer.get_remote_sender_id()
 	if not pending.has(id) or pending[id].authenticated: return
 	if not session_ready:
-		pending[id].hello = [protocol,secret,nickname,xp]
+		pending[id].hello = [protocol,secret,nickname,xp,requested_mode]
 		return
-	_authenticate(id,protocol,secret,nickname,xp)
-func _authenticate(id: int, protocol: int, secret: String, nickname: String, xp: int) -> void:
+	_authenticate(id,protocol,secret,nickname,xp,requested_mode)
+func _authenticate(id: int, protocol: int, secret: String, nickname: String, xp: int, requested_mode: String = "tdm") -> void:
 	if not pending.has(id) or pending[id].authenticated: return
 	if protocol!=PROTOCOL:
-		_reject.rpc_id(id,"Different game version. Everyone needs BRASSLINE 0.9.0.")
+		_reject.rpc_id(id,"Different game version. Update everyone through the launcher.")
+		return
+	if requested_mode!=mode_id:
+		_reject.rpc_id(id,"This server is playing "+("Destroy and Diffuse" if is_destroy() else "Team Deathmatch")+". Select that mode before joining.")
 		return
 	if secret!=password:
 		_reject.rpc_id(id,"Incorrect server password.")
@@ -231,10 +244,13 @@ func _loaded_peer(id: int, map_index: int, number: int) -> void:
 					pending[waiting_id].slot = previous
 			entry.slot = candidate.index
 			break
+	var takeover = capture_life(entry.slot) if is_destroy() else {}
+	if is_destroy(): destroy.clear_slot(entry.slot)
 	_remove_actor(entry.slot)
 	_attach_human(id,entry.slot,entry.name,entry.xp)
+	if is_destroy(): restore_life(entry.slot,takeover)
 	pending.erase(id)
-	_spawn.rpc_id(id,slots[entry.slot].actor.position,slots[entry.slot].actor.life_id,entry.slot)
+	_spawn.rpc_id(id,slots[entry.slot].actor.position,slots[entry.slot].actor.life_id,entry.slot,slots[entry.slot].actor.health)
 	print("HUMAN_JOIN peer=",id," slot=",entry.slot," actors=",actors().size())
 func _attach_human(id: int, slot: int, nickname: String, xp: int) -> void:
 	var actor = game.player if id==1 else Player.new()
@@ -286,13 +302,16 @@ func _disconnected(id: int) -> void:
 	for index in votes.values(): vote_counts[index] += 1
 	if not server or not peers.has(id): return
 	var slot = peers[id].slot
+	var takeover = capture_life(slot) if is_destroy() else {}
+	if is_destroy(): destroy.clear_slot(slot)
 	peers.erase(id)
 	_remove_actor(slot)
 	if running and not closing:
 		slots[slot].peer = 0
 		if not loading_round:
 			_add_bot(slot)
-			_balance_humans()
+			if is_destroy(): restore_life(slot,takeover)
+			else: _balance_humans()
 	print("HUMAN_LEFT slot=",slot," actors=",actors().size())
 func send_input(actor: Node, move: Vector2, jump: bool, aiming: bool) -> void:
 	sequence += 1
@@ -325,7 +344,7 @@ func _input_bundle(life: int, packed: PackedByteArray) -> void:
 	if decoded is Array: _receive_frames(peers[id],life,decoded)
 func _receive_frames(p: Dictionary, life: int, frames: Array) -> void:
 	var actor = slots[p.slot].actor
-	if life!=actor.life_id or not round_active or not p.get("loaded",true) or frames.size()>INPUT_WINDOW: return
+	if life!=actor.life_id or actor.health<=0 or not combat_allowed() or not p.get("loaded",true) or frames.size()>INPUT_WINDOW: return
 	for frame in frames:
 		if not frame is Array or frame.size()!=8: continue
 		if not frame[0] is int or not frame[1] is Vector2: continue
@@ -375,7 +394,7 @@ func _command(number: int, life: int, action: String, value: int, yaw: float, pi
 	var actor = slots[p.slot].actor
 	if number<=p.received_action or number>p.received_action+100 or not is_finite(yaw) or not is_finite(pitch) or not is_finite(view_time): return
 	p.received_action = number
-	if life!=actor.life_id or actor.health<=0 or p.commands.size()>=32 or p.budget<1: return
+	if not combat_allowed() or life!=actor.life_id or actor.health<=0 or p.commands.size()>=32 or p.budget<1: return
 	if action not in ["fire","reload","jump","equip","grenade","throw","parry"]: return
 	if value<0 or value>3: return
 	p.budget -= 1
@@ -389,7 +408,8 @@ func _commands(p: Dictionary, actor: Node) -> void:
 		if cmd.life==actor.life_id and cmd.action in ["fire","throw"] and (actor.equip_cooldown>0 or actor.fire_cooldown>0) and game.clock-cmd.time<.35: break
 		p.commands.pop_front()
 		p.last_action = cmd.id
-		if cmd.life!=actor.life_id or actor.health<=0 or game.clock-cmd.time>.5: continue
+		if not combat_allowed() or cmd.life!=actor.life_id or actor.health<=0 or game.clock-cmd.time>.5: continue
+		if is_destroy() and destroy.holding(actor.net_slot): continue
 		actor.net_action_id = cmd.id
 		actor.rotation.y = cmd.yaw
 		actor.pitch = cmd.pitch
@@ -421,13 +441,14 @@ func _physics_process(delta: float) -> void:
 		elif session_ready and Time.get_ticks_msec()-last_packet>10000: fail("Connection lost. Your confirmed XP is saved.")
 		return
 	if not session_ready: return
+	if is_destroy(): destroy.tick(delta)
 	_check_round()
 	lag_comp.record(slots,game.clock)
 	for id in pending.keys():
 		if pending[id].has("hello") and not pending[id].authenticated:
 			var hello = pending[id].hello
 			pending[id].erase("hello")
-			_authenticate(id,hello[0],hello[1],hello[2],hello[3])
+			_authenticate(id,hello[0],hello[1],hello[2],hello[3],hello[4])
 		if pending.has(id) and pending[id].has("loaded"):
 			var loaded = pending[id].loaded
 			pending[id].erase("loaded")
@@ -479,7 +500,7 @@ func _send_snapshots() -> void:
 			continue
 		if not p.get("loaded",true) or not can_send(id): continue
 		var a = slots[p.slot].actor
-		var own = {"recovery":a.fire_cooldown if a.weapon==2 else 0.0,"radar":game.radar.contacts(actors(),a.team,game.clock),"server_hz":server_tick_rate,"ack":a.last_input_sequence,"action":p.last_action,"ammo":a.ammo,"blast":a.blast_count,"smoke":a.smoke_count,"held":a.held_grenade,"ground":a.is_on_floor(),"jump_buffer":a.jump_buffer,"last_jump":a.last_jump_time,"xp":p.progress.xp_for("YOU"),"awards":p.progress.awards,"level_until":p.progress.level_up_until,"level":p.progress.recent_level,"round":round_info()}
+		var own = {"recovery":a.fire_cooldown if a.weapon==2 else 0.0,"radar":game.radar.contacts(actors(),a.team,game.clock),"server_hz":server_tick_rate,"ack":a.last_input_sequence,"action":p.last_action,"ammo":a.ammo,"blast":a.blast_count,"smoke":a.smoke_count,"held":a.held_grenade,"ground":a.is_on_floor(),"jump_buffer":a.jump_buffer,"last_jump":a.last_jump_time,"xp":p.progress.xp_for("YOU"),"awards":p.progress.awards,"level_until":p.progress.level_up_until,"level":p.progress.recent_level,"round":round_info(a.team)}
 		var payload = var_to_bytes([game.clock,states,board,own,game.combat.scores,projectiles,smokes]).compress(FileAccess.COMPRESSION_DEFLATE)
 		packet_serial += 1
 		largest_packet = maxi(largest_packet,payload.size())
@@ -582,6 +603,9 @@ func _reconcile(row: Array, own: Dictionary) -> void:
 	inputs = inputs.filter(func(input): return input[0]>own.ack)
 	var yaw = a.rotation.y
 	var ground = 1 if own.ground else 0
+	if a.health<=0: inputs.clear()
+	a.collision_layer = 2 if a.health>0 else 0
+	for area in a.hitboxes: area.collision_layer = 8 if a.health>0 else 0
 	for input in inputs:
 		a.rotation.y = input[4]
 		a.simulate_movement(FIXED_STEP,input[1],input[2],input[3],true,ground,1 if input[7] else 0)
@@ -617,7 +641,7 @@ func _reconcile(row: Array, own: Dictionary) -> void:
 		a.weapon = row[6]
 		if absf(a.reload_timer-remaining_reload)>.10: a.reload_timer = remaining_reload
 @rpc("authority","call_remote","reliable",0)
-func _spawn(at: Vector3, life: int, joined_slot: int = -1) -> void:
+func _spawn(at: Vector3, life: int, joined_slot: int = -1, spawn_health: int = 100) -> void:
 	if server or life<game.player.life_id or (session_ready and life<=spawned_life): return
 	if joined_slot>=0 and joined_slot<10:
 		own_slot = joined_slot
@@ -627,7 +651,7 @@ func _spawn(at: Vector3, life: int, joined_slot: int = -1) -> void:
 	loading_round = false
 	if not game.menu_open: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	last_packet = Time.get_ticks_msec()
-	status = "Connected • 5v5 TDM • Your team: "+("BLUE" if own_slot<5 else "RED")
+	status = "Connected • "+("Destroy and Diffuse" if is_destroy() else "5v5 TDM")+" • Your team: "+("BLUE" if own_slot<5 else "RED")
 	pending_reconciliation = []
 	inputs.clear()
 	actions.clear()
@@ -636,11 +660,18 @@ func _spawn(at: Vector3, life: int, joined_slot: int = -1) -> void:
 	predicted_grenades.clear()
 	game.player.life_id = life
 	game.player.reset_at(at)
+	game.player.health = spawn_health
+	if spawn_health<=0:
+		game.player.collision_layer = 0
+		for area in game.player.hitboxes: area.collision_layer = 0
 	game.player.team = 1 if own_slot<5 else 2
 	game.player.set_physics_process(true)
 	_cosmetic_request.rpc_id(1,game.cosmetics.equipped)
 func human_died(actor: Node) -> void:
 	if not server: return
+	if is_destroy():
+		destroy.drop(actor.net_slot)
+		return
 	_respawn_human.call_deferred(actor)
 func _respawn_human(actor: Node) -> void:
 	if not running or not is_instance_valid(actor) or actor.health>0: return
@@ -670,7 +701,7 @@ func record_kill(victim: String, weapon: String, head: bool, air: bool, group: i
 	context.merge({"time":game.clock,"one_shot":one_shot},true)
 	slots[k].kills += 1
 	slots[v].deaths += 1
-	game.combat.scores[team] += 1
+	if not is_destroy(): game.combat.scores[team] += 1
 	if peers.has(slots[k].peer):
 		peers[slots[k].peer].progress.record("YOU",victim,team,head,one_shot,game.clock,group,weapon=="LONGSHOT")
 	else: slots[k].xp += 100 if head or one_shot else 50
@@ -678,7 +709,7 @@ func record_kill(victim: String, weapon: String, head: bool, air: bool, group: i
 	_kill(k,v,weapon,head,air,group,team,context)
 	for id in peers:
 		if id!=1 and can_send(id): _kill.rpc_id(id,k,v,weapon,head,air,group,team,context)
-	if game.combat.scores[team]>=KILL_LIMIT: _end_round()
+	if not is_destroy() and game.combat.scores[team]>=KILL_LIMIT: _end_round()
 @rpc("authority","call_remote","reliable",0)
 func _kill(k: int, v: int, weapon: String, head: bool, air: bool, group: int, team: int, context: Dictionary = {}) -> void:
 	var killer = "YOU" if k==own_slot else (slots[k].name if k<slots.size() else "PLAYER")
@@ -750,6 +781,7 @@ func fail(message: String) -> void:
 	status = message
 	stop()
 func stop() -> void:
+	destroy.reset_view()
 	game.radar.clear()
 	lag_comp.clear()
 	game.save_profile()
@@ -811,11 +843,12 @@ var vote_counts = [0,0,0,0]
 var winner = ""
 var round_number = 1
 var loading_round = false
-func round_info() -> Dictionary:
-	return {"active":round_active,"end":round_end,"vote_end":vote_end,"counts":vote_counts,"winner":winner,"round":round_number,"loading":loading_round}
+func round_info(team: int = 0) -> Dictionary:
+	return {"mode":mode_id,"objective":destroy.packet(team if team>0 else game.player.team) if is_destroy() else {},"active":round_active,"end":round_end,"vote_end":vote_end,"counts":vote_counts,"winner":winner,"round":round_number,"loading":loading_round}
 func _check_round() -> void:
 	if not session_ready or loading_round: return
 	if round_active:
+		if is_destroy(): return
 		if game.combat.scores[1]>=KILL_LIMIT or game.combat.scores[2]>=KILL_LIMIT or game.clock>=round_end: _end_round()
 	elif game.clock>=vote_end:
 		_next_round.call_deferred()
@@ -834,10 +867,11 @@ func _end_round() -> void:
 		if game.combat.scores[team]>game.combat.scores[3-team]: game.challenge_event(slots[p.slot].actor,"wins")
 	_round_notice(round_info())
 	for id in peers:
-		if id!=1 and can_send(id): _round_notice.rpc_id(id,round_info())
+		if id!=1 and can_send(id): _round_notice.rpc_id(id,round_info(slots[peers[id].slot].team))
 	print("ROUND_END ",winner," score=",game.combat.scores," vote_seconds=",VOTE_TIME)
 @rpc("authority","call_remote","reliable",0)
 func _round_notice(info: Dictionary) -> void:
+	if not server and info.has("objective"): destroy.remote = info.objective
 	round_active = info.active
 	round_end = info.end
 	vote_end = info.vote_end
@@ -889,13 +923,14 @@ func _next_round() -> void:
 	for id in peers:
 		if id!=1 and peers[id].get("loaded",false):
 			var actor = slots[peers[id].slot].actor
-			_spawn.rpc_id(id,actor.position,actor.life_id)
+			_spawn.rpc_id(id,actor.position,actor.life_id,-1,actor.health)
 	session_ready = true
 	loading_round = false
 	round_active = true
 	round_end = game.clock+TIME_LIMIT
 	winner = ""
 	if not game.menu_open: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if is_destroy(): destroy.start_match()
 	print("ROUND_START number=",round_number," map=",map_index," actors=",actors().size())
 @rpc("authority","call_remote","reliable",0)
 func _change_map(map_index: int, number: int) -> void:
@@ -922,7 +957,7 @@ func _map_loaded(number: int) -> void:
 	peers[id].loaded = true
 	if session_ready:
 		var actor = slots[peers[id].slot].actor
-		_spawn.rpc_id(id,actor.position,actor.life_id)
+		_spawn.rpc_id(id,actor.position,actor.life_id,-1,actor.health)
 
 @rpc("authority","call_remote","unreliable",1)
 func _state_chunk(number: int, index: int, count: int, bytes: PackedByteArray) -> void:
@@ -940,7 +975,7 @@ func _state_chunk(number: int, index: int, count: int, bytes: PackedByteArray) -
 		if key<=applied_packet or key<number-4: packet_parts.erase(key)
 
 func _balance_humans() -> void:
-	if loading_round or not server: return
+	if loading_round or not server or (is_destroy() and destroy.phase!="reset"): return
 	while true:
 		var counts = [0,0,0]
 		for peer_id in peers:
@@ -1032,3 +1067,53 @@ func _cosmetic_request(loadout: Dictionary) -> void:
 	if actor.cosmetics==clean: return
 	actor.cosmetics = clean
 	actor.viewmodel.apply_cosmetics()
+
+func capture_life(slot: int) -> Dictionary:
+	var a = slots[slot].actor
+	var human = slots[slot].peer>0
+	var inventory = a.get_meta("replacement_inventory",{"ammo":[24,7,0,6],"blast":1,"smoke":1}).duplicate(true)
+	if human:
+		inventory = {"ammo":a.ammo.duplicate(),"blast":a.blast_count,"smoke":a.smoke_count}
+	else: inventory.ammo[0] = a.rounds
+	return {"health":a.health,"position":a.position,"rotation":a.rotation,"life":a.life_id,"human":human,"inventory":inventory,"weapon":a.weapon if human else 0,"reload":a.reload_timer if human else a.reload_time,"cooldown":a.fire_cooldown if human else a.shot_timer}
+func restore_life(slot: int, data: Dictionary) -> void:
+	if data.is_empty(): return
+	var a = slots[slot].actor
+	a.health = data.health
+	a.position = data.position
+	a.rotation = data.rotation
+	if (slots[slot].peer>0)!=data.human: a.rotation.y += PI
+	a.life_id = maxi(a.life_id,data.life+1)
+	if slots[slot].peer>0:
+		a.ammo = data.inventory.ammo.duplicate()
+		a.blast_count = data.inventory.blast
+		a.smoke_count = data.inventory.smoke
+		a.weapon = data.weapon
+		a.reload_timer = data.reload
+		a.fire_cooldown = data.cooldown
+	else:
+		a.rounds = data.inventory.ammo[0]
+		a.reload_time = 1.8 if a.rounds<=0 else (data.reload if data.weapon==0 else 0.0)
+		a.set_meta("replacement_inventory",data.inventory.duplicate(true))
+	if a.health<=0:
+		a.collision_layer = 0
+		for area in a.hitboxes: area.collision_layer = 0
+		if slots[slot].peer==0: a.hide()
+@rpc("any_peer","call_remote","unreliable_ordered",1)
+func _objective_hold(life: int, wanted: bool) -> void:
+	if not server or not is_destroy(): return
+	var id = multiplayer.get_remote_sender_id()
+	if peers.has(id) and peers[id].loaded: destroy.receive_hold(peers[id].slot,life,wanted)
+@rpc("any_peer","call_remote","reliable",0)
+func _drop_bomb(life: int) -> void:
+	if not server or not is_destroy(): return
+	var id = multiplayer.get_remote_sender_id()
+	if peers.has(id):
+		var a = slots[peers[id].slot].actor
+		if a.life_id==life and a.health>0: destroy.drop(a.net_slot)
+@rpc("authority","call_remote","reliable",0)
+func _objective_explosion(at: Vector3) -> void:
+	game.effects.burst(at)
+	for offset in [Vector3(2,1,0),Vector3(-2,2,1),Vector3(0,4,-1)]: game.effects.burst(at+offset)
+	game.world_sound("blast",at,0,false)
+	game.player.hurt_flash = .9*clampf(1-game.player.position.distance_to(at)/45.0,0,1)

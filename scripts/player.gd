@@ -101,6 +101,9 @@ func current_spread() -> float:
 	return Rules.spread_degrees(weapon, Vector2(velocity.x,velocity.z).length(), not is_on_floor(), scope_age)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if locally_controlled and health>0 and not game.menu_open and game.net.is_destroy() and event.is_action_pressed("drop_bomb"):
+		if game.net.server: game.net.destroy.drop(net_slot)
+		else: game.net._drop_bomb.rpc_id(1,life_id)
 	if not locally_controlled or not game.active or game.menu_open or health<=0:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -128,9 +131,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			equip(i)
 
 func _physics_process(delta: float) -> void:
-	if not game.active or (game.net.running and not game.net.round_active):
-		return
 	if locally_controlled and game.net.is_client_ready(): game.net.consume_reconciliation()
+	if not game.active or (game.net.running and not game.net.combat_allowed()):
+		return
 	look_sway = look_sway.lerp(Vector2.ZERO,1-exp(-12*delta))
 	landing_pose = move_toward(landing_pose,0,delta*3)
 	hurt_flash = maxf(0,hurt_flash-delta)
@@ -220,6 +223,7 @@ func advance_weapon_state(delta: float) -> void:
 	scope_age = scope_age + delta if aiming and weapon == 3 else 0.0
 
 func start_parry() -> void:
+	if objective_busy(): return
 	if health<=0 or weapon!=2 or not held_grenade.is_empty() or parry_cooldown>0 or fire_cooldown>0 or equip_cooldown>0: return
 	network_action("parry")
 	parry_timer = .28
@@ -262,6 +266,7 @@ func equip_grenade(kind: String) -> void:
 	play_sound("equip", -19.0)
 
 func shoot() -> void:
+	if objective_busy(): return
 	if parry_timer>0: return
 	if health<=0 or not held_grenade.is_empty() or fire_cooldown > 0.0 or equip_cooldown > 0.0 or reload_timer > 0.0:
 		return
@@ -301,6 +306,7 @@ func shoot() -> void:
 	camera.rotation.x = pitch
 
 func start_reload() -> void:
+	if objective_busy(): return
 	if health<=0 or not held_grenade.is_empty() or weapon == 2 or reload_timer > 0.0 or ammo[weapon] == Rules.WEAPONS[weapon]["mag"]:
 		return
 	network_action("reload")
@@ -313,6 +319,7 @@ func start_reload() -> void:
 	play_sound("equip", -12.0)
 
 func throw_grenade(kind: String, short_toss: bool = false) -> void:
+	if objective_busy(): return
 	if health<=0 or equip_cooldown > 0.0:
 		return
 	if (kind == "blast" and blast_count == 0) or (kind == "smoke" and smoke_count == 0):
@@ -335,7 +342,7 @@ func throw_grenade(kind: String, short_toss: bool = false) -> void:
 	play_sound("equip", -12.0)
 
 func take_damage(amount: int, source_team: int, attacker: String = "ENEMY") -> bool:
-	if game.mode not in ["combat","online"] or (game.net.running and not game.net.round_active) or health<=0 or source_team==team:
+	if game.mode not in ["combat","online"] or (game.net.running and not game.net.combat_allowed()) or health<=0 or source_team==team:
 		return false
 	health = maxi(0,health-amount)
 	hurt_flash = .35
@@ -501,3 +508,8 @@ func _create_hitboxes() -> void:
 		add_child(area)
 		area.position.y = 1.68 if head else .8
 		hitboxes.append(area)
+
+func objective_busy() -> bool:
+	if not game.net.is_destroy(): return false
+	if not game.net.combat_allowed(): return true
+	return held("interact") if locally_controlled else game.net.destroy.holding(net_slot)

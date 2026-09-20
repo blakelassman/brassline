@@ -52,7 +52,7 @@ func _physics_process(delta: float) -> void:
 	visual_offset *= exp(-20*delta)
 	body.position = visual_offset
 	cap.position = Vector3(0,.12,0)+visual_offset
-	if game.net.running and not game.net.round_active: return
+	if game.net.running and not game.net.combat_allowed(): return
 	fuse -= delta
 	advance_motion(delta,true)
 	var pulse = int((Rules.FUSE - fuse) / 0.25)
