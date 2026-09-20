@@ -10,6 +10,7 @@ var progression = Progression.new()
 const Network = preload("res://scripts/network.gd")
 const Preferences = preload("res://scripts/preferences.gd")
 const Optimizer = preload("res://scripts/optimizer.gd")
+var replays = preload("res://scripts/killcam.gd").new()
 var net: Node
 var prefs = Preferences.new()
 var menu_open = true
@@ -102,6 +103,8 @@ func _ready() -> void:
 	combat = Combat.new()
 	combat.game = self
 	add_child(combat)
+	replays.game = self
+	add_child(replays)
 	var canvas = CanvasLayer.new()
 	canvas.layer = 1
 	add_child(canvas)
@@ -128,6 +131,8 @@ func _ready() -> void:
 		call_deferred("_lagcomp_test")
 	elif "--prediction-test" in args:
 		call_deferred("_prediction_test")
+	elif "--killcam-test" in args:
+		call_deferred("_killcam_test")
 	elif "--destroy-test" in args:
 		call_deferred("_destroy_test")
 	elif "--network-test" in args:
@@ -152,7 +157,7 @@ func _ready() -> void:
 		call_deferred("_self_test")
 	elif Array(args).any(func(arg): return arg.begins_with("--capture")):
 		call_deferred("_capture")
-	print("BRASSLINE ready | multiplayer prototype 0.10.0 | Godot ", Engine.get_version_info()["string"])
+	print("BRASSLINE ready | multiplayer prototype 0.11.0 | Godot ", Engine.get_version_info()["string"])
 
 func _training_targets() -> void:
 	var names = ["WALL PEEK","STRAFE","HIGH GROUND","CLOSE RANGE","TEAMMATE","COLLATERAL A","COLLATERAL B"]
@@ -206,14 +211,19 @@ func _load_audio() -> void:
 	audio_mix.setup(self)
 
 func sound(key: String, volume: float = -12.0) -> void:
+	if replays.active and key!="ui": return
 	audio_mix.local(self,key,volume)
 
 func world_sound(key: String, at: Vector3, volume: float, replicate: bool = true) -> void:
 	if replicate and net.running and net.server and key not in ["rifle","pistol","sniper","blast"]: net.audio_fx(-1,key,at,volume)
+	if replays.active: return
 	audio_mix.spatial(self,key,at,volume)
 
 func start_mode(selected: String, map_index: int = -1) -> void:
 	if changing_map: return
+	replays.reset()
+	net.replay_wait.clear()
+	net.final_replay_until=0
 	radar.clear()
 	if net.running and selected!="online": await net.leave()
 	if map_index>=0: selected_map = clampi(map_index,0,3)
@@ -322,6 +332,7 @@ func _physics_process(delta: float) -> void:
 		if prefs.data.xp!=progression.xp_for("YOU") or prefs.dirty: save_profile()
 	if not active: return
 	clock += delta
+	if not net.running: replays.history.sample(self,delta)
 	if not net.is_client_ready(): progression.update(clock)
 	update_feed()
 	toast_time = maxf(0.0, toast_time - delta)
@@ -433,6 +444,7 @@ func record_kill(victim: String, weapon_name: String, head: bool, airborne: bool
 		if net.server and not net.combat_allowed(): return
 		net.record_kill(victim,weapon_name,head,airborne,group,killer,killer_team,one_shot,context)
 		return
+	if mode=="combat": replays.note_kill(victim,killer,weapon_name,head)
 	if victim=="YOU": accept_challenge("death",{"killer":killer})
 	if killer=="YOU" and victim!="YOU": accept_challenge("kill",context)
 	progression.record(killer,victim,killer_team,head,one_shot,clock,group,weapon_name=="LONGSHOT")
@@ -531,7 +543,7 @@ func shoot_ray(origin: Vector3, direction: Vector3, weapon_id: int, airborne: bo
 			any_head = any_head or head
 			if killed:
 				shot_kills += 1
-				record_kill(target.target_name,Rules.WEAPONS[weapon_id]["name"],head,airborne,action_serial,shooter.target_name,shooter.team,full_health and damage>=100,{"scope":shooter.scope_age,"distance":origin.distance_to(hit.position),"health":shooter.health,"boosted":clock-shooter.last_boost_time<5})
+				record_kill(target.target_name,Rules.WEAPONS[weapon_id]["name"],head,airborne,action_serial,shooter.target_name,shooter.team,full_health and damage>=100,{"view_lag":clampf(clock-shooter.shot_view_time,0,.5) if rewind else 0.0,"scope":shooter.scope_age,"distance":origin.distance_to(hit.position),"health":shooter.health,"boosted":clock-shooter.last_boost_time<5})
 				if head and airborne:
 					air_heads += 1
 			hit["headshot"] = head
@@ -543,6 +555,7 @@ func shoot_ray(origin: Vector3, direction: Vector3, weapon_id: int, airborne: bo
 	first_hit["kill_count"] = shot_kills
 	_tracer(origin, end)
 	if net.running: net.shot_fx(shooter.net_slot,origin,end,weapon_id)
+	else: replays.history.shot(self,shooter,origin,end,weapon_id)
 	return first_hit
 
 func _tracer(start: Vector3, end: Vector3, color: Color = Color("ffe6a8")) -> void:
@@ -561,6 +574,7 @@ func melee_attack(shooter: Node = null) -> void:
 	action_serial += 1
 	var origin = shooter.camera.global_position
 	var forward = -shooter.camera.global_basis.z
+	replays.history.shot(self,shooter,origin,origin+forward*2.3,2)
 	var closest = null
 	var closest_distance = 2.3
 	for target in net.actors() if net.running else targets:
@@ -668,6 +682,27 @@ func _capture() -> void:
 		player.pitch = -.08
 		player.camera.rotation.x = player.pitch
 		net.destroy.carrier = 0
+	if "--capture-killcam" in modes or "--capture-final-scope" in modes:
+		await start_mode("combat")
+		for actor in combat.actors(): actor.set_physics_process(false)
+		player.reset_at(Vector3(-5,.05,20))
+		player.rotation.y=0; player.pitch=0; player.camera.rotation.x=0
+		var victim=combat.bots[4]
+		victim.position=Vector3(-5,.05,16)
+		player.weapon=3 if "--capture-final-scope" in modes else 0
+		player.camera.fov=32 if player.weapon==3 else 86
+		for i in range(65):
+			clock+=.05
+			replays.history.sample(self,.05,true)
+		victim.health=0
+		replays.note_kill(victim.target_name,"YOU",Rules.WEAPONS[player.weapon].name,true)
+		replays.history.shot(self,player,player.camera.global_position,victim.position+Vector3.UP*1.64,player.weapon)
+		replays.flush()
+		await get_tree().process_frame
+		replays.play(replays.history.last_clip,true)
+		replays.set_process(false)
+		replays.cursor=replays.clip.time-.2
+		replays.advance(0)
 	if "--capture-client" in modes:
 		net.join("127.0.0.1",27020,"")
 		var deadline = Time.get_ticks_msec()+10000
@@ -939,5 +974,10 @@ func _audio_test() -> void:
 
 func _destroy_test() -> void:
 	var suite = load("res://tests/test_destroy.gd").new()
+	add_child(suite)
+	await suite.run(self)
+
+func _killcam_test() -> void:
+	var suite=load("res://tests/test_killcam.gd").new()
 	add_child(suite)
 	await suite.run(self)

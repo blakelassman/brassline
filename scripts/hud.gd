@@ -76,7 +76,7 @@ func _label(parent: Node, text: String, size: int, color: Color) -> void:
 func _process(_delta: float) -> void:
 	if game.challenges.update(_delta,game.active and not game.menu_open): game.sound("achievement",-15)
 	queue_redraw()
-	vote_panel.visible = game.net.running and not game.net.round_active and not game.menu_open
+	vote_panel.visible = game.net.running and not game.net.round_active and not game.menu_open and not game.replays.active and game.clock>=game.net.final_replay_until
 	if vote_panel.visible:
 		vote_label.text = "%s\nBLUE %d  /  RED %d\n%s" % [game.net.winner,game.combat.scores[1],game.combat.scores[2],"LOADING NEXT ARENA…" if game.net.loading_round else "VOTE NEXT MAP  /  %ds" % maxi(0,ceili(game.net.vote_end-game.clock))]
 		for index in range(4):
@@ -100,6 +100,9 @@ func _draw() -> void:
 	var h = size.y
 	if not game.active or game.menu_open:
 		draw_rect(Rect2(Vector2.ZERO,size),Color(0.04,0.10,0.13,0.76))
+		return
+	if game.replays.active:
+		_draw_killcam()
 		return
 	var p = game.player
 	var scoped = p.health>0 and p.weapon == 3 and p.scope_age >= Rules.SCOPE_READY and p.held_grenade.is_empty()
@@ -346,3 +349,25 @@ func _draw_objective() -> void:
 			elif game.net.server: bomb_at = game.net.slots[info.carrier].actor.position
 			elif game.net.proxies.has(info.carrier): bomb_at = game.net.proxies[info.carrier].position
 		draw_rect(Rect2(radar_point(bomb_at)-Vector2(3,3),Vector2(6,6)),gold)
+
+func _draw_killcam() -> void:
+	var replay=game.replays
+	var red=Color("ef725b")
+	if replay.scoped: _draw_scope()
+	draw_rect(Rect2(12,12,size.x-24,size.y-24),Color(red,.65),false,2)
+	draw_rect(Rect2(12,12,size.x-24,78),Color(.02,.04,.055,.8))
+	centered("FINAL KILL" if replay.final else "KILLCAM",47,28,red)
+	centered("0.25× SLOW MOTION" if replay.final and replay.playback_speed<1 else "FIRST-PERSON REPLAY",72,12,ink)
+	var info=replay.clip.roster[replay.clip.killer]
+	var victim=replay.clip.roster.get(replay.clip.victim,["PLAYER"])[0]
+	draw_rect(Rect2(12,size.y-106,size.x-24,94),Color(.02,.04,.055,.84))
+	centered(str(info[0])+"  →  "+str(victim),size.y-78,22,ink)
+	centered(replay.clip.weapon+("  •  HEADSHOT" if replay.clip.head else ""),size.y-54,14,gold)
+	centered("FINAL KILL REPLAY • CANNOT SKIP" if replay.final else "PRESS "+binding_name("jump")+" TO SKIP",size.y-28,13,dim)
+	var length=maxf(.01,replay.clip.time-replay.clip.frames[0][0])
+	draw_rect(Rect2(12,size.y-112,(size.x-24)*clampf((replay.cursor-replay.clip.frames[0][0])/length,0,1),3),red)
+	if not replay.scoped:
+		var at=size*.5
+		for dir in [Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN]: draw_line(at+dir*5,at+dir*11,ink,1.5)
+	if replay.hit_played:
+		for dir in [Vector2(-1,-1),Vector2(1,-1),Vector2(-1,1),Vector2(1,1)]: draw_line(size*.5+dir*14,size*.5+dir*22,gold if replay.clip.head else ink,2)

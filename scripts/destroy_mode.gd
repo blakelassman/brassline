@@ -47,6 +47,9 @@ func start_match() -> void:
 	start_round()
 func start_round() -> void:
 	if not net.running or not net.server: return
+	net.game.replays.reset()
+	net.replay_wait.clear()
+	net.final_replay_until=0
 	phase = "reset"
 	net._balance_humans()
 	if round_index==3: attackers = 2
@@ -210,7 +213,7 @@ func finish(team: int, message: String) -> void:
 		phase = "match_over"
 		net._end_round()
 	else:
-		next_round_at = net.game.clock+INTERMISSION
+		next_round_at = net.game.clock+INTERMISSION+net.schedule_final_replay()
 	print("DESTROY_RESULT round=",round_index," team=",team," reason=",reason)
 func detonate() -> void:
 	net._objective_explosion(planted)

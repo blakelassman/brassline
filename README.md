@@ -1,4 +1,4 @@
-# BRASSLINE 0.10.0
+# BRASSLINE 0.11.0
 
 A free Windows Godot FPS prototype with movement-focused combat, offline practice,
 and self-hosted internet multiplayer.
@@ -24,7 +24,21 @@ No Git, Python, editor installation or account is needed for players.
 Source checkouts and existing portable packages can still run
 `START_BRASSLINE.bat`. See `START_HERE.txt` for controls and `HOSTING.txt` for hosting.
 
-## New: Destroy and Diffuse
+## New: Killcams
+
+Watch the attacker's first-person view after a death. Press your **Jump** binding
+(Space or scroll down by default) to skip: TDM respawns you immediately, while
+Destroy and Diffuse returns you to teammate spectating. Normal death killcams
+can be disabled in Settings.
+
+Every online TDM match and Destroy round with a recorded kill ends with a
+**non-skippable final killcam**, slowing the finishing moment to quarter speed.
+Scoped views, weapon finishes, actual shot traces, headshot feedback and
+collateral victims are replayed before the next round or map vote.
+Everyone must update to protocol **12**; existing saves stay intact.
+[Replay behavior and verification](docs/KILLCAMS.md).
+
+## Destroy and Diffuse
 
 Online → Game mode now selects TDM or **Destroy and Diffuse**. Competitive 5v5,
 with bots filling empty slots, one bomb, A/B sites, first to three round wins,
@@ -35,7 +49,7 @@ V to cycle teammates while spectating. Every action is rebindable.
 Bots plant, recover the bomb, defend and defuse across four objective districts
 with multiple approaches and upper floors. Matches finish with map voting.
 Choose the same mode when hosting/joining by IP; there is no global matchmaking
-service. Everyone must update (protocol **11**); your existing saves remain.
+service. Use the same current version on the host and every client; your existing saves remain.
 [Rules, maps, hosting and verification](docs/DESTROY_AND_DIFFUSE.md).
 
 ## Audio update

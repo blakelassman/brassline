@@ -8,7 +8,9 @@ const Preferences = preload("res://scripts/preferences.gd")
 const LagCompensation = preload("res://scripts/lag_compensation.gd")
 var lag_comp = LagCompensation.new()
 var lag_rescued_hits = 0
-const PROTOCOL = 11
+const PROTOCOL = 12
+var replay_wait: Dictionary = {}
+var final_replay_until = 0.0
 var mode_id = "tdm"
 var destroy = preload("res://scripts/destroy_mode.gd").new()
 func is_destroy() -> bool: return running and mode_id=="destroy"
@@ -268,7 +270,7 @@ func _attach_human(id: int, slot: int, nickname: String, xp: int) -> void:
 	var progress = game.progression if id==1 else Progression.new()
 	progress.reset_roster(false)
 	progress.profiles["YOU"] = xp
-	peers[id] = {"slot":slot,"progress":progress,"commands":[],"last_action":0,"received_action":0,"last_input":Time.get_ticks_msec(),"last_sequence":0,"budget":80.0,"loaded":true,"transport":pending[id].transport if pending.has(id) else null,"leaving":false,"frames":[],"move_credit":2.0,"frame_gap":0}
+	peers[id] = {"killcams":game.prefs.data.killcams if id==1 else true,"slot":slot,"progress":progress,"commands":[],"last_action":0,"received_action":0,"last_input":Time.get_ticks_msec(),"last_sequence":0,"budget":80.0,"loaded":true,"transport":pending[id].transport if pending.has(id) else null,"leaving":false,"frames":[],"move_credit":2.0,"frame_gap":0}
 	actor.reset_at(game.combat.choose_spawn(actor.team,actor))
 	actor.rotation.y = atan2(actor.position.x,actor.position.z)
 func _add_bot(index: int) -> void:
@@ -296,6 +298,7 @@ func _remove_actor(index: int) -> void:
 	if actor!=game.player: actor.queue_free()
 	slots[index].actor = null
 func _disconnected(id: int) -> void:
+	replay_wait.erase(id)
 	pending.erase(id)
 	votes.erase(id)
 	vote_counts = [0,0,0,0]
@@ -441,6 +444,13 @@ func _physics_process(delta: float) -> void:
 		elif session_ready and Time.get_ticks_msec()-last_packet>10000: fail("Connection lost. Your confirmed XP is saved.")
 		return
 	if not session_ready: return
+	game.replays.history.sample(game,delta)
+	for id in replay_wait.keys():
+		if not peers.has(id): replay_wait.erase(id); continue
+		if game.clock>=replay_wait[id].until:
+			var actor = slots[peers[id].slot].actor
+			replay_wait.erase(id)
+			if combat_allowed() and not is_destroy(): _respawn_human(actor)
 	if is_destroy(): destroy.tick(delta)
 	_check_round()
 	lag_comp.record(slots,game.clock)
@@ -586,6 +596,7 @@ func _snapshot(time: float, states: Array, board: Array, own: Dictionary, scores
 func _reconcile(row: Array, own: Dictionary) -> void:
 	var a = game.player
 	if row[8]<a.life_id: return
+	if game.replays.active and not game.replays.final and row[8]==game.replays.clip.get("victim_life",-1) and row[5]>0: return
 	if row[8]!=a.life_id:
 		_spawn(row[1],row[8])
 	var previous = a.position
@@ -658,6 +669,7 @@ func _spawn(at: Vector3, life: int, joined_slot: int = -1, spawn_health: int = 1
 	for grenade in predicted_grenades.values():
 		if is_instance_valid(grenade): grenade.queue_free()
 	predicted_grenades.clear()
+	if game.replays.active: game.replays.stop(false)
 	game.player.life_id = life
 	game.player.reset_at(at)
 	game.player.health = spawn_health
@@ -667,14 +679,17 @@ func _spawn(at: Vector3, life: int, joined_slot: int = -1, spawn_health: int = 1
 	game.player.team = 1 if own_slot<5 else 2
 	game.player.set_physics_process(true)
 	_cosmetic_request.rpc_id(1,game.cosmetics.equipped)
+	_replay_settings.rpc_id(1,game.prefs.data.killcams)
 func human_died(actor: Node) -> void:
 	if not server: return
 	if is_destroy():
 		destroy.drop(actor.net_slot)
 		return
+	if peers.has(actor.peer_id) and peers[actor.peer_id].killcams:
+		replay_wait[actor.peer_id]={"life":actor.life_id,"until":game.clock+.1}
 	_respawn_human.call_deferred(actor)
 func _respawn_human(actor: Node) -> void:
-	if not running or not is_instance_valid(actor) or actor.health>0: return
+	if not running or not is_instance_valid(actor) or actor.health>0 or replay_wait.has(actor.peer_id) or not combat_allowed(): return
 	actor.life_id += 1
 	actor.reset_at(game.combat.choose_spawn(actor.team,actor))
 	if actor.peer_id!=1 and can_send(actor.peer_id): _spawn.rpc_id(actor.peer_id,actor.position,actor.life_id)
@@ -697,6 +712,7 @@ func record_kill(victim: String, weapon: String, head: bool, air: bool, group: i
 	var k = slot_from_name(killer)
 	var v = slot_from_name(victim)
 	if k<0 or v<0 or k==v or slots[k].team==slots[v].team: return
+	game.replays.note_kill(str(v),str(k),weapon,head,float(context.get("view_lag",0.0)))
 	context = context.duplicate()
 	context.merge({"time":game.clock,"one_shot":one_shot},true)
 	slots[k].kills += 1
@@ -731,6 +747,7 @@ func _hit(head: bool) -> void:
 	game.sound("head" if head else "hit",-5 if head else -10)
 func shot_fx(slot: int, start: Vector3, end: Vector3, weapon: int) -> void:
 	if not server: return
+	game.replays.history.shot(game,slots[slot].actor,start,end,weapon)
 	for id in peers:
 		if id!=1 and can_send(id): _shot_fx.rpc_id(id,slot,start,end,weapon)
 @rpc("authority","call_remote","unreliable",2)
@@ -781,6 +798,9 @@ func fail(message: String) -> void:
 	status = message
 	stop()
 func stop() -> void:
+	game.replays.reset()
+	replay_wait.clear()
+	final_replay_until=0
 	destroy.reset_view()
 	game.radar.clear()
 	lag_comp.clear()
@@ -844,7 +864,7 @@ var winner = ""
 var round_number = 1
 var loading_round = false
 func round_info(team: int = 0) -> Dictionary:
-	return {"mode":mode_id,"objective":destroy.packet(team if team>0 else game.player.team) if is_destroy() else {},"active":round_active,"end":round_end,"vote_end":vote_end,"counts":vote_counts,"winner":winner,"round":round_number,"loading":loading_round}
+	return {"final_until":final_replay_until,"mode":mode_id,"objective":destroy.packet(team if team>0 else game.player.team) if is_destroy() else {},"active":round_active,"end":round_end,"vote_end":vote_end,"counts":vote_counts,"winner":winner,"round":round_number,"loading":loading_round}
 func _check_round() -> void:
 	if not session_ready or loading_round: return
 	if round_active:
@@ -856,10 +876,11 @@ func _check_round() -> void:
 func _end_round() -> void:
 	if not round_active: return
 	round_active = false
+	var replay_delay = schedule_final_replay()
 	winner = "DRAW" if game.combat.scores[1]==game.combat.scores[2] else ("BLUE TEAM WINS" if game.combat.scores[1]>game.combat.scores[2] else "RED TEAM WINS")
 	votes.clear()
 	vote_counts = [0,0,0,0]
-	vote_end = game.clock+VOTE_TIME
+	vote_end = game.clock+VOTE_TIME+replay_delay
 	for id in peers:
 		var p = peers[id]
 		p.progress.finish_chain(game.clock)
@@ -871,6 +892,7 @@ func _end_round() -> void:
 	print("ROUND_END ",winner," score=",game.combat.scores," vote_seconds=",VOTE_TIME)
 @rpc("authority","call_remote","reliable",0)
 func _round_notice(info: Dictionary) -> void:
+	final_replay_until = info.get("final_until",0.0)
 	if not server and info.has("objective"): destroy.remote = info.objective
 	round_active = info.active
 	round_end = info.end
@@ -879,16 +901,16 @@ func _round_notice(info: Dictionary) -> void:
 	winner = info.winner
 	round_number = info.round
 	loading_round = info.loading
-	if not round_active: Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if not round_active and not game.replays.active and game.clock>=final_replay_until: Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 func vote(map_index: int) -> void:
-	if not running or round_active or loading_round or map_index<0 or map_index>3: return
+	if not running or round_active or loading_round or game.clock<final_replay_until or map_index<0 or map_index>3: return
 	if server: _set_vote(1,map_index)
 	else: _vote.rpc_id(1,map_index)
 @rpc("any_peer","call_remote","reliable",0)
 func _vote(map_index: int) -> void:
 	if server: _set_vote(multiplayer.get_remote_sender_id(),map_index)
 func _set_vote(id: int, map_index: int) -> void:
-	if not peers.has(id) or round_active or loading_round or map_index<0 or map_index>3: return
+	if not peers.has(id) or round_active or loading_round or game.clock<final_replay_until or map_index<0 or map_index>3: return
 	votes[id] = map_index
 	vote_counts = [0,0,0,0]
 	for index in votes.values(): vote_counts[index] += 1
@@ -1117,3 +1139,61 @@ func _objective_explosion(at: Vector3) -> void:
 	for offset in [Vector3(2,1,0),Vector3(-2,2,1),Vector3(0,4,-1)]: game.effects.burst(at+offset)
 	game.world_sound("blast",at,0,false)
 	game.player.hurt_flash = .9*clampf(1-game.player.position.distance_to(at)/45.0,0,1)
+
+func deliver_death_replay(clip: Dictionary) -> void:
+	if not server: return
+	var v = int(clip.victim)
+	if v<0 or v>=slots.size() or slots[v].peer<=0: return
+	var actor=slots[v].actor
+	var id=slots[v].peer
+	if actor.life_id!=clip.victim_life or actor.health>0 or not peers[id].killcams: return
+	var packed=game.replays.History.encode(clip)
+	if packed.is_empty(): return
+	if not is_destroy(): replay_wait[id]={"life":actor.life_id,"until":game.clock+game.replays.DEATH_TIMEOUT}
+	if id==1: game.replays.play(clip,false)
+	elif can_send(id): _replay_clip.rpc_id(id,packed,false,round_number,actor.life_id)
+func schedule_final_replay() -> float:
+	if not server or not game.replays.has_final(): return 0.0
+	final_replay_until=game.clock+game.replays.FINAL_LOCK
+	_broadcast_final_replay.call_deferred()
+	return game.replays.FINAL_LOCK
+func _broadcast_final_replay() -> void:
+	if not running or not server: return
+	game.replays.flush()
+	var clip=game.replays.history.last_clip
+	if clip.is_empty(): return
+	var packed=game.replays.History.encode(clip)
+	if packed.is_empty(): return
+	if not dedicated: game.replays.play(clip,true)
+	for id in peers:
+		if id!=1 and can_send(id) and peers[id].loaded: _replay_clip.rpc_id(id,packed,true,round_number,slots[peers[id].slot].actor.life_id)
+@rpc("authority","call_remote","reliable",2)
+func _replay_clip(packed: PackedByteArray, mandatory: bool, generation: int, viewer_life: int) -> void:
+	if server or not running or not session_ready or generation!=round_number or viewer_life!=game.player.life_id: return
+	var clip=game.replays.History.decode(packed)
+	if clip.is_empty() or clip.map!=game.current_map: return
+	if not mandatory:
+		if clip.victim!=str(own_slot) or clip.victim_life!=game.player.life_id: return
+		if not game.prefs.data.killcams: finish_death_replay(); return
+		game.player.health=0; game.player.collision_layer=0
+		for area in game.player.hitboxes: area.collision_layer=0
+		pending_reconciliation.clear(); inputs.clear(); actions.clear()
+	game.replays.play(clip,mandatory)
+func finish_death_replay() -> void:
+	if not running: return
+	if server: _complete_replay(1,game.player.life_id)
+	else: _replay_done.rpc_id(1,game.player.life_id)
+func _complete_replay(id: int, life: int) -> void:
+	if not server or not peers.has(id) or not replay_wait.has(id): return
+	var actor=slots[peers[id].slot].actor
+	if actor.life_id!=life or replay_wait[id].life!=life or not combat_allowed() or is_destroy(): return
+	replay_wait.erase(id)
+	_respawn_human(actor)
+@rpc("any_peer","call_remote","reliable",0)
+func _replay_done(life: int) -> void:
+	_complete_replay(multiplayer.get_remote_sender_id(),life)
+@rpc("any_peer","call_remote","reliable",0)
+func _replay_settings(enabled: bool) -> void:
+	if not server: return
+	var id=multiplayer.get_remote_sender_id()
+	if peers.has(id): peers[id].killcams=enabled

@@ -16,6 +16,7 @@ func frames(count: int) -> void:
 	await get_tree().process_frame
 
 func run(game: Node) -> void:
+	game.prefs.data.killcams=false
 	await frames(3)
 	check(game.mode=="training" and game.targets.size()==7 and game.combat.bots.is_empty(),"Training opens with passive targets and no combat bots")
 	game.start_mode("combat")

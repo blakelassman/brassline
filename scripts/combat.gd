@@ -165,11 +165,18 @@ func player_died(killer: String, killer_team: int) -> void:
 	last_killer = killer
 	game.action_serial += 1
 	game.record_kill("YOU","RIFLE",false,false,game.action_serial,killer,killer_team)
-	respawn_player.call_deferred()
+	if not game.prefs.data.killcams:
+		respawn_player.call_deferred()
+	else:
+		# A missing attacker/history should never leave the player stuck dead.
+		var life=game.player.life_id
+		await get_tree().create_timer(.12).timeout
+		if game.player.life_id==life and game.player.health<=0 and not game.replays.active: respawn_player()
 
 func respawn_player() -> void:
 	if game.mode not in ["combat","online"] or game.player.health>0:
 		return
+	if not game.net.running: game.player.life_id+=1
 	game.player.reset_at(choose_spawn(1,game.player))
 	game.player.rotation.y = atan2(game.player.position.x,game.player.position.z)
 	game.player.fire_blocked_until_release = true
@@ -201,6 +208,7 @@ func shoot_bot(bot: CharacterBody3D, aim_point: Vector3) -> void:
 	var angle = bot.rng.randf()*TAU
 	var spread = tan(deg_to_rad(bot.profile.spread))*sqrt(bot.rng.randf())
 	direction = (direction+right*cos(angle)*spread+up*sin(angle)*spread).normalized()
+	bot.set_meta("replay_pitch",asin(clampf(direction.y,-1,1)))
 	var query = PhysicsRayQueryParameters3D.create(origin,origin+direction*40,1|8)
 	query.collide_with_areas = true
 	var excluded: Array[RID] = []
@@ -221,5 +229,6 @@ func shoot_bot(bot: CharacterBody3D, aim_point: Vector3) -> void:
 				game.record_kill(victim.target_name,"RIFLE",false,false,game.action_serial,bot.target_name,bot.team)
 	game._tracer(origin+direction*.45,end,Color("73d5df") if bot.team==1 else Color("ff9772"))
 	if game.net.running: game.net.shot_fx(bot.net_slot,origin,end,0)
+	else: game.replays.history.shot(game,bot,origin,end,0)
 	bot.muzzle_time = .065
 	game.world_sound("rifle",origin,-16)

@@ -20,6 +20,7 @@ func freeze_bots() -> void:
 	for bot in game.combat.bots: bot.set_physics_process(false)
 func run(g: Node) -> void:
 	game = g
+	game.prefs.data.killcams=false
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--join-port="): join_port = arg.trim_prefix("--join-port=").to_int()
 		if arg.begins_with("--coord="): root = arg.trim_prefix("--coord=")+"/"
@@ -92,6 +93,7 @@ func host_test() -> void:
 	mark("win_shot")
 	check(await wait_for(func(): return not game.net.round_active),"250th kill ends the round immediately")
 	check(game.combat.scores[2]==250 and game.net.winner=="RED TEAM WINS","First to 250 wins with no extra score after end")
+	await wait_for(func(): return game.clock>=game.net.final_replay_until)
 	game.net.vote(1)
 	check(await wait_for(func(): return game.net.votes.size()==2),"Map vote crosses real RPC connection")
 	check(await wait_for(func(): return game.net.vote_counts[1]==2),"One final vote per player; changed vote replaces previous")
@@ -167,6 +169,7 @@ func client_test() -> void:
 	game.player.shoot()
 	check(await wait_for(func(): return not game.net.round_active),"Client receives end-of-round and vote state")
 	check(await wait_for(func(): return game.challenges.stats.get("wins",0)==1),"Winning client receives its authoritative victory challenge")
+	await wait_for(func(): return game.clock>=game.net.final_replay_until)
 	game.net.vote(2)
 	game.net.vote(1)
 	check(await wait_for(func(): return game.current_map==1 and game.net.is_client_ready(),15),"Client reloads voted arena without reconnecting")
