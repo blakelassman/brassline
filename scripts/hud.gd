@@ -80,7 +80,7 @@ func _process(_delta: float) -> void:
 	if vote_panel.visible:
 		vote_label.text = "%s\nBLUE %d  /  RED %d\n%s" % [game.net.winner,game.combat.scores[1],game.combat.scores[2],"LOADING NEXT ARENA…" if game.net.loading_round else "VOTE NEXT MAP  /  %ds" % maxi(0,ceili(game.net.vote_end-game.clock))]
 		for index in range(4):
-			vote_buttons[index].text = game.Maps.NAMES[index]+"\n%d VOTES" % game.net.vote_counts[index]
+			vote_buttons[index].text = (preload("res://scripts/destroy_maps.gd").NAMES[index] if game.net.is_destroy() else game.Maps.NAMES[index])+"\n%d VOTES" % game.net.vote_counts[index]
 			vote_buttons[index].disabled = game.net.loading_round
 
 
@@ -89,7 +89,9 @@ func text_at(text: String, at: Vector2, size: int = 18, color: Color = ink) -> v
 
 func centered(text: String, y: float, size: int = 18, color: Color = ink) -> void:
 	var width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	text_at(text, Vector2((self.size.x-width)/2,y), size, color)
+	var at = Vector2((self.size.x-width)/2,y)
+	draw_string_outline(font,at,text,HORIZONTAL_ALIGNMENT_LEFT,-1,size,4,Color(.03,.07,.09,color.a*.85))
+	text_at(text,at,size,color)
 
 func _draw() -> void:
 	if font == null or game.player == null:
@@ -100,14 +102,14 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO,size),Color(0.04,0.10,0.13,0.76))
 		return
 	var p = game.player
-	var scoped = p.weapon == 3 and p.scope_age >= Rules.SCOPE_READY and p.held_grenade.is_empty()
+	var scoped = p.health>0 and p.weapon == 3 and p.scope_age >= Rules.SCOPE_READY and p.held_grenade.is_empty()
 	if scoped:
 		_draw_scope()
 	_draw_minimap()
 	_draw_medal()
 	if game.mode in ["combat","online"]:
 		centered("%d   :   %d" % [game.combat.scores[1],game.combat.scores[2]],42,26,ink)
-	if game.net.running:
+	if game.net.running and not game.net.is_destroy():
 		var seconds = maxi(0,ceili(game.net.round_end-game.clock)) if game.net.round_active else 0
 		centered("%02d:%02d" % [seconds/60,seconds%60],65,14,dim)
 	if game.net.is_client_ready() and Time.get_ticks_msec()-game.net.last_packet>750:
@@ -155,6 +157,7 @@ func _draw() -> void:
 			draw_rect(Rect2(Vector2.ZERO,size),Color(.8,.10,.04,p.hurt_flash*.35))
 			draw_rect(Rect2(3,3,w-6,h-6),Color(.95,.18,.07,p.hurt_flash*2),false,6)
 
+	if game.net.is_destroy(): _draw_objective()
 	_draw_xp()
 	if Input.is_action_pressed("scoreboard"): _draw_scoreboard()
 
@@ -221,7 +224,7 @@ func _draw_scoreboard() -> void:
 	draw_rect(Rect2(x,y,840,604),Color("132b34"))
 	draw_rect(Rect2(x,y,840,3),gold)
 	text_at("SCOREBOARD",Vector2(x+28,y+40),27,ink)
-	text_at("TDM / FIRST TO 250" if game.mode=="online" else ("ENDLESS 5v5" if game.mode=="combat" else "AIM TRAINING"),Vector2(x+565,y+38),17,gold)
+	text_at("DESTROY / FIRST TO 3" if game.net.is_destroy() else ("TDM / FIRST TO 250" if game.mode=="online" else ("ENDLESS 5v5" if game.mode=="combat" else "AIM TRAINING")),Vector2(x+565,y+38),17,gold)
 	for col in [["PLAYER",40],["LEVEL",378],["KILLS",493],["DEATHS",587],["TOTAL XP",683]]:
 		text_at(col[0],Vector2(x+col[1],y+77),12,dim)
 	for team in [1,2]:
@@ -251,7 +254,7 @@ func radar_point(position: Vector3) -> Vector2:
 func _draw_minimap() -> void:
 	draw_rect(Rect2(24,24,212,212),Color(.035,.075,.095,.9))
 	draw_rect(Rect2(116,34,28,192),Color(.13,.19,.21,.85))
-	for rect in game.Maps.footprints(game.current_map):
+	for rect in (preload("res://scripts/destroy_maps.gd").footprints() if game.net.is_destroy() else game.Maps.footprints(game.current_map)):
 		draw_rect(Rect2(Vector2(130,130)+rect.position*3.05,rect.size*3.05),Color(.27,.36,.38,.8))
 	draw_rect(Rect2(24,24,212,212),Color(.65,.74,.74,.5),false,1)
 	text_at("N",Vector2(125,40),11,dim)
@@ -280,7 +283,7 @@ func _draw_medal() -> void:
 	var alpha = minf(clampf(age/.16,0,1),clampf((2.6-age)/.4,0,1))
 	var color = Color(gold,alpha)
 	var x = size.x*.5
-	var y = 128.0-8.0*(1-clampf(age/.2,0,1))
+	var y = (168.0 if game.net.is_destroy() else 128.0)-8.0*(1-clampf(age/.2,0,1))
 	var points = PackedVector2Array([Vector2(x,y-21),Vector2(x+15,y),Vector2(x,y+21),Vector2(x-15,y),Vector2(x,y-21)])
 	draw_polyline(points,color,2,true)
 	draw_line(Vector2(x-180,y),Vector2(x-35,y),Color(gold,alpha*.5),1)
@@ -294,3 +297,52 @@ func medal_text(value: String, y: float, font_size: int, color: Color) -> void:
 	var at = Vector2((size.x-width)*.5,y)
 	draw_string_outline(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,4,Color(.03,.07,.09,color.a*.85))
 	draw_string(font,at,value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,color)
+
+func binding_name(action: String) -> String:
+	var codes = game.prefs.data.bindings.get(action,[])
+	return game.Preferences.key_label(codes[0]) if not codes.is_empty() else "Unbound"
+func _draw_objective() -> void:
+	var d = game.net.destroy
+	var info = d.state()
+	if info.is_empty(): return
+	var attacking = info.attackers==game.player.team
+	var seconds = maxi(0,ceili(info.deadline-game.clock))
+	var role = "ATTACK" if attacking else "DEFEND"
+	centered("ROUND %d / 5  •  %s  •  %02d:%02d" % [info.round,role,seconds/60,seconds%60],67,14,gold if info.phase=="planted" else dim)
+	centered("%d ALIVE     FIRST TO 3     %d ALIVE" % [info.alive[1],info.alive[2]],86,12,dim)
+	for i in range(2):
+		var at = radar_point(d.SITES[i])
+		draw_arc(at,10,0,TAU,24,gold,2,true)
+		text_at("A" if i==0 else "B",at+Vector2(-4,4),12,ink)
+		var camera = get_viewport().get_camera_3d()
+		if camera!=null and not camera.is_position_behind(d.SITES[i]+Vector3.UP*2.5):
+			var screen = camera.unproject_position(d.SITES[i]+Vector3.UP*2.5)
+			if Rect2(30,110,size.x-60,size.y-230).has_point(screen):
+				draw_circle(screen,13,Color(.04,.08,.10,.65))
+				text_at("A" if i==0 else "B",screen+Vector2(-5,5),16,gold)
+	if info.phase=="intermission":
+		centered(info.reason,size.y*.32,28,gold)
+		centered(("HALFTIME • SWITCHING SIDES  /  " if info.round==2 else "NEXT ROUND  /  ")+"%ds" % maxi(0,ceili(info.next-game.clock)),size.y*.32+28,16,ink)
+	elif info.phase=="planted":
+		centered("BOMB PLANTED AT "+("A" if info.site==0 else "B"),113,18,Color("ff9570"))
+	if game.player.health<=0:
+		centered("SPECTATING  •  "+d.spectating_name,size.y-112,17,ink)
+		centered(binding_name("spectate_next")+"  NEXT TEAMMATE  •  One life per round",size.y-88,12,dim)
+	elif info.worker==game.net.own_slot:
+		var duration = d.PLANT_SECONDS if info.phase=="live" else d.DEFUSE_SECONDS
+		centered("PLANTING" if info.phase=="live" else "DEFUSING",size.y*.62,18,gold)
+		draw_rect(Rect2(size.x*.5-120,size.y*.62+12,240,4),Color(.12,.18,.2,.9))
+		draw_rect(Rect2(size.x*.5-120,size.y*.62+12,240*clampf(info.work/duration,0,1),4),gold)
+		centered("KEEP HOLDING "+binding_name("interact"),size.y*.62+40,12,dim)
+	elif info.phase=="live" and info.carrier==game.net.own_slot:
+		var near_site = game.player.position.distance_to(d.SITES[0])<2.8 or game.player.position.distance_to(d.SITES[1])<2.8
+		centered("HOLD %s TO PLANT • STAND STILL" % binding_name("interact") if near_site else "YOU HAVE THE BOMB  •  %s TO DROP" % binding_name("drop_bomb"),size.y-112,15,gold)
+	elif info.phase=="planted" and not attacking and game.player.position.distance_to(info.planted)<1.9:
+		centered("HOLD %s TO DEFUSE • 8 SECONDS" % binding_name("interact"),size.y-112,15,gold)
+	if info.phase=="live" and attacking:
+		var bomb_at = info.dropped
+		if info.carrier>=0:
+			if info.carrier==game.net.own_slot: bomb_at = game.player.position
+			elif game.net.server: bomb_at = game.net.slots[info.carrier].actor.position
+			elif game.net.proxies.has(info.carrier): bomb_at = game.net.proxies[info.carrier].position
+		draw_rect(Rect2(radar_point(bomb_at)-Vector2(3,3),Vector2(6,6)),gold)

@@ -142,6 +142,7 @@ func spawn_score(pos: Vector3, team: int, ignore: Node) -> float:
 	return score+nearest_enemy*2.5
 
 func choose_spawn(team: int, ignore: Node) -> Vector3:
+	if game.net.is_destroy(): return game.net.destroy.spawn_for(team,ignore.net_slot if is_instance_valid(ignore) else 0)
 	var best = SPAWNS[0 if team==1 else 3]
 	var best_score = -INF
 	if spawn_candidates.is_empty():

@@ -33,7 +33,7 @@ func _ready() -> void:
 	var top = HBoxContainer.new()
 	shell.add_child(top)
 	label(top,"BRASSLINE",46,ink).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label(top,"MULTIPLAYER  /  0.9.0",15,gold)
+	label(top,"MULTIPLAYER  /  0.10.0",15,gold)
 	var columns = HBoxContainer.new()
 	columns.add_theme_constant_override("separation",32)
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -132,11 +132,19 @@ func _build_play(page: VBoxContainer) -> void:
 	label(page,"Practice shots, boost jumps and movement at your own pace.",14,muted)
 	button(page,"02   ENDLESS 5v5 BOTS",func(): await game.start_mode("combat"))
 	label(page,"You + four allies versus five bots. No time or score limit.",14,muted)
-	button(page,"03   ONLINE TEAM DEATHMATCH",func(): show_page("ONLINE"))
-	label(page,"First team to 250 kills. Ten minutes max. Vote for the next map.",14,gold)
+	button(page,"03   ONLINE MULTIPLAYER",func(): show_page("ONLINE"))
+	label(page,"Team Deathmatch or Destroy and Diffuse. Human teams balanced; bots fill every slot.",14,gold)
 func _build_online(page: VBoxContainer) -> void:
 	label(page,"PLAY WITH FRIENDS",28,ink)
 	label(page,"Humans split evenly across teams. Bots keep every match 5v5.",15,muted)
+	label(page,"GAME MODE",13,muted)
+	var mode_picker = OptionButton.new()
+	mode_picker.add_item("TEAM DEATHMATCH • 250 kills / 10 minutes")
+	mode_picker.add_item("DESTROY AND DIFFUSE • First to 3 / one life per round")
+	mode_picker.selected = 1 if game.prefs.data.online_mode=="destroy" else 0
+	mode_picker.item_selected.connect(func(index): game.prefs.data.online_mode = "destroy" if index==1 else "tdm"; game.prefs.dirty = true)
+	mode_picker.custom_minimum_size.y = 42
+	page.add_child(mode_picker)
 	nickname = field(page,"PLAYER NAME",game.prefs.data.name)
 	nickname.max_length = 18
 	nickname.text_changed.connect(func(value): game.prefs.data.name = Preferences.clean_name(value); game.prefs.dirty = true)
@@ -165,10 +173,10 @@ func _build_online(page: VBoxContainer) -> void:
 	page.add_child(row)
 	host_button = button(row,"HOST & PLAY",func():
 		_save_connection()
-		await game.net.host(int(port.value),secret.text))
+		await game.net.host(int(port.value),secret.text,false,"destroy" if mode_picker.selected==1 else "tdm"))
 	join_button = button(row,"JOIN SERVER",func():
 		_save_connection()
-		game.net.join(address.text,int(port.value),secret.text))
+		game.net.join(address.text,int(port.value),secret.text,"destroy" if mode_picker.selected==1 else "tdm"))
 	host_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	join_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var help = label(page,"HOST: select a map on Play, then host here. Forward this UDP port to your PC and allow the game through Windows Firewall. Friends use your public IP.\n\nSame PC: 127.0.0.1. Same home: host's local IPv4. See HOSTING.txt for the short setup guide.",14,muted)

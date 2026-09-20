@@ -1,4 +1,4 @@
-BRASSLINE 0.9.0 - CHALLENGES & LOCKER UPDATE
+BRASSLINE 0.10.0 - DESTROY AND DIFFUSE UPDATE
 
 NEW: BRASSLINE_LAUNCHER.bat installs a separate, automatically updatable copy.
 Click Install & Play once, then Update & Play for future versions. Optional:
@@ -9,6 +9,16 @@ Update the source checkout or extract a complete package. Keep UDP 27020 and you
 Your saved level and settings carry over automatically on the same Windows user.
 
 WHAT CHANGED
+- ONLINE > GAME MODE: choose TDM or DESTROY AND DIFFUSE.
+- Destroy and Diffuse: first to 3 rounds, 5v5 bot fill, A/B sites, one bomb.
+- 2-minute rounds, 60-second planted bomb, 8-second defuse, 4-second plant.
+- Hold E to plant/defuse. X drops bomb. V cycles teammates when spectating.
+- No mid-round respawns. Halftime after round two. Vote maps after the match.
+- Four objective districts with ramp stairs, upper floors and multiple routes.
+- Both host and friends select the same mode before connecting by IP.
+- See docs/DESTROY_AND_DIFFUSE.md for complete rules.
+
+ALREADY INCLUDED
 - CHALLENGES: 86 permanent milestones, jump shots, collats, 10/30/50 killstreaks.
 - Top-center notifications and a quest chime; notifications survive respawning.
 - LOCKER: preview and equip operator outfits and all four weapon finishes.
@@ -28,7 +38,7 @@ ALSO INCLUDED
 GIT SOURCE CHECKOUT
 Keep your existing engine folder beside project.godot, then run START_BRASSLINE.bat.
 Engine binaries are excluded from Git. An existing engine folder survives updates.
-Your friends need the same 0.9.0 source and engine folder, or a full portable package.
+Your friends need the same 0.10.0 source and engine folder, or a full portable package.
 
 
 PLAY

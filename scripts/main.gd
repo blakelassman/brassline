@@ -128,6 +128,8 @@ func _ready() -> void:
 		call_deferred("_lagcomp_test")
 	elif "--prediction-test" in args:
 		call_deferred("_prediction_test")
+	elif "--destroy-test" in args:
+		call_deferred("_destroy_test")
 	elif "--network-test" in args:
 		call_deferred("_network_test")
 	elif "--collection-test" in args:
@@ -150,7 +152,7 @@ func _ready() -> void:
 		call_deferred("_self_test")
 	elif Array(args).any(func(arg): return arg.begins_with("--capture")):
 		call_deferred("_capture")
-	print("BRASSLINE ready | multiplayer prototype 0.9.0 | Godot ", Engine.get_version_info()["string"])
+	print("BRASSLINE ready | multiplayer prototype 0.10.0 | Godot ", Engine.get_version_info()["string"])
 
 func _training_targets() -> void:
 	var names = ["WALL PEEK","STRAFE","HIGH GROUND","CLOSE RANGE","TEAMMATE","COLLATERAL A","COLLATERAL B"]
@@ -183,7 +185,9 @@ func _world() -> void:
 	world_root.name = "ArenaGeometry"
 	add_child(world_root)
 	Maps.environment(world_root,current_map)
-	Maps.build(world_root,current_map)
+	world_root.set_meta("destroy",net.is_destroy())
+	if net.is_destroy(): preload("res://scripts/destroy_maps.gd").build(world_root,current_map)
+	else: Maps.build(world_root,current_map)
 	launch_pad = Maps.PADS[current_map]
 	Optimizer.batch(world_root)
 
@@ -225,7 +229,7 @@ func start_mode(selected: String, map_index: int = -1) -> void:
 			target.hide()
 			target.queue_free()
 	targets.clear()
-	if current_map!=selected_map:
+	if current_map!=selected_map or world_root.get_meta("destroy",false)!=net.is_destroy():
 		changing_map = true
 		world_root.free()
 		current_map = selected_map
@@ -426,7 +430,7 @@ func record_kill(victim: String, weapon_name: String, head: bool, airborne: bool
 	context = context.duplicate()
 	context.merge({"weapon":weapon_name,"head":head,"air":airborne,"group":group,"one_shot":one_shot,"time":clock,"victim":victim},true)
 	if net.running:
-		if net.server and not net.round_active: return
+		if net.server and not net.combat_allowed(): return
 		net.record_kill(victim,weapon_name,head,airborne,group,killer,killer_team,one_shot,context)
 		return
 	if victim=="YOU": accept_challenge("death",{"killer":killer})
@@ -462,7 +466,7 @@ func update_feed() -> void:
 	kill_feed = kill_feed.filter(func(entry): return clock-entry.time < 7.0 and (entry.evicted < 0 or clock-entry.evicted < .45))
 
 func shoot_ray(origin: Vector3, direction: Vector3, weapon_id: int, airborne: bool, shooter: Node = null) -> Dictionary:
-	if net.running and not net.round_active: return {}
+	if net.running and not net.combat_allowed(): return {}
 	if net.is_client_ready():
 		# Cosmetic local ray only. Health, headshots, XP and kills need server confirmation.
 		shot_count += 1
@@ -552,7 +556,7 @@ func _tracer(start: Vector3, end: Vector3, color: Color = Color("ffe6a8")) -> vo
 	tween.tween_callback(beam.queue_free)
 
 func melee_attack(shooter: Node = null) -> void:
-	if net.is_client_ready() or (net.running and not net.round_active): return
+	if net.is_client_ready() or (net.running and not net.combat_allowed()): return
 	if shooter==null: shooter = player
 	action_serial += 1
 	var origin = shooter.camera.global_position
@@ -655,6 +659,15 @@ func _capture() -> void:
 			cosmetics.owned[preview_id] = 1
 			hud.menu.collection_menu.refresh_inventory()
 			hud.menu.collection_menu.select_item(preview_id)
+	if "--capture-destroy" in modes:
+		await net.host(27927,"",false,"destroy")
+		net.set_physics_process(false)
+		for actor in net.actors(): actor.set_physics_process(false)
+		player.reset_at(Vector3(-23,.05,-4))
+		player.rotation.y = -.4
+		player.pitch = -.08
+		player.camera.rotation.x = player.pitch
+		net.destroy.carrier = 0
 	if "--capture-client" in modes:
 		net.join("127.0.0.1",27020,"")
 		var deadline = Time.get_ticks_msec()+10000
@@ -820,7 +833,7 @@ func menu_sound() -> void:
 	if DisplayServer.get_name()!="headless": ui_speaker.play()
 
 func damage_actor(victim: Node, amount: int, source_team: int, attacker: String) -> bool:
-	if net.running and not net.round_active: return false
+	if net.running and not net.combat_allowed(): return false
 	if victim is Player: return victim.take_damage(amount,source_team,attacker)
 	return victim.take_damage(amount,source_team)
 func save_profile() -> bool:
@@ -884,7 +897,7 @@ func _dedicated_server() -> void:
 	selected_map = clampi(int(config.get_value("server","map",0)),0,3)
 	var port = int(config.get_value("server","port",27020))
 	var secret = str(config.get_value("server","password",""))
-	await net.host(port,secret,true)
+	await net.host(port,secret,true,str(config.get_value("server","mode","tdm")))
 func _network_test() -> void:
 	var suite = load("res://tests/test_network.gd").new()
 	add_child(suite)
@@ -921,5 +934,10 @@ func _display_test() -> void:
 
 func _audio_test() -> void:
 	var suite = load("res://tests/test_audio.gd").new()
+	add_child(suite)
+	await suite.run(self)
+
+func _destroy_test() -> void:
+	var suite = load("res://tests/test_destroy.gd").new()
 	add_child(suite)
 	await suite.run(self)

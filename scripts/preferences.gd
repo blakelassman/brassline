@@ -1,9 +1,9 @@
 extends RefCounted
 ## One local profile, atomically saved with backup. Tests can use an isolated path.
 const PATH = "user://profile_v1.json"
-const DEFAULT_KEYS = {"forward":[KEY_W],"back":[KEY_S],"left":[KEY_A],"right":[KEY_D],"jump":[KEY_SPACE,-MOUSE_BUTTON_WHEEL_DOWN],"crouch":[KEY_CTRL,KEY_C],"fire":[-MOUSE_BUTTON_LEFT],"aim":[-MOUSE_BUTTON_RIGHT],"weapon_0":[KEY_1],"weapon_1":[KEY_2],"weapon_2":[KEY_3],"weapon_3":[KEY_4],"reload":[KEY_R],"blast":[KEY_G],"smoke":[KEY_Q],"refill":[KEY_F],"reset":[KEY_T],"scoreboard":[KEY_TAB],"help":[KEY_H],"pause":[KEY_ESCAPE]}
-const LABELS = {"forward":"Move forward","back":"Move backward","left":"Strafe left","right":"Strafe right","jump":"Jump","crouch":"Crouch (hold)","fire":"Fire / slash / throw","aim":"Aim / scope / parry / short toss","weapon_0":"Rifle","weapon_1":"Heavy pistol","weapon_2":"Sword","weapon_3":"Sniper","reload":"Reload","blast":"Equip blast grenade","smoke":"Equip smoke grenade","refill":"Refill training supplies","reset":"Reset training drill","scoreboard":"Scoreboard (hold)","help":"Toggle tips","pause":"Open / close menu"}
-var data: Dictionary = {"version":1,"name":"Player","id":"","xp":0,"sensitivity":.0023,"volume":.65,"weapons_volume":1.0,"effects_volume":1.0,"feedback_volume":.85,"ambience_volume":.35,"quality":1,"fps_limit":120,"fullscreen":false,"resolution_width":1920,"resolution_height":1080,"challenges":{},"cosmetics":{},"bindings":{},"last_address":"","port":27020}
+const DEFAULT_KEYS = {"interact":[KEY_E],"drop_bomb":[KEY_X],"spectate_next":[KEY_V],"forward":[KEY_W],"back":[KEY_S],"left":[KEY_A],"right":[KEY_D],"jump":[KEY_SPACE,-MOUSE_BUTTON_WHEEL_DOWN],"crouch":[KEY_CTRL,KEY_C],"fire":[-MOUSE_BUTTON_LEFT],"aim":[-MOUSE_BUTTON_RIGHT],"weapon_0":[KEY_1],"weapon_1":[KEY_2],"weapon_2":[KEY_3],"weapon_3":[KEY_4],"reload":[KEY_R],"blast":[KEY_G],"smoke":[KEY_Q],"refill":[KEY_F],"reset":[KEY_T],"scoreboard":[KEY_TAB],"help":[KEY_H],"pause":[KEY_ESCAPE]}
+const LABELS = {"interact":"Plant / defuse bomb (hold)","drop_bomb":"Drop bomb","spectate_next":"Next teammate (spectating)","forward":"Move forward","back":"Move backward","left":"Strafe left","right":"Strafe right","jump":"Jump","crouch":"Crouch (hold)","fire":"Fire / slash / throw","aim":"Aim / scope / parry / short toss","weapon_0":"Rifle","weapon_1":"Heavy pistol","weapon_2":"Sword","weapon_3":"Sniper","reload":"Reload","blast":"Equip blast grenade","smoke":"Equip smoke grenade","refill":"Refill training supplies","reset":"Reset training drill","scoreboard":"Scoreboard (hold)","help":"Toggle tips","pause":"Open / close menu"}
+var data: Dictionary = {"version":1,"name":"Player","id":"","xp":0,"sensitivity":.0023,"volume":.65,"weapons_volume":1.0,"effects_volume":1.0,"feedback_volume":.85,"ambience_volume":.35,"quality":1,"fps_limit":120,"fullscreen":false,"resolution_width":1920,"resolution_height":1080,"challenges":{},"cosmetics":{},"bindings":{},"online_mode":"tdm","last_address":"","port":27020}
 var path = PATH
 var error = ""
 var dirty = false
@@ -38,6 +38,20 @@ func load_profile() -> void:
 	var valid: Dictionary = {}
 	for action in DEFAULT_KEYS:
 		var values = data.bindings.get(action,DEFAULT_KEYS[action])
+		# New actions must not steal a key from a player's existing custom binds.
+		if not data.bindings.has(action):
+			var occupied: Array = []
+			for codes in data.bindings.values():
+				if codes is Array:
+					for code in codes:
+						if code is int or code is float: occupied.append(int(code))
+			for codes in valid.values(): occupied.append_array(codes)
+			values = DEFAULT_KEYS[action].filter(func(code): return code not in occupied)
+			if values.is_empty():
+				for code in [KEY_F6,KEY_F7,KEY_F8,KEY_F9,KEY_F11,KEY_F12]:
+					if code not in occupied:
+						values = [code]
+						break
 		valid[action] = []
 		if values is Array:
 			for code in values.slice(0,2):

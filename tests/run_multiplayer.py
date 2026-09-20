@@ -16,6 +16,7 @@ parser.add_argument('--godot', default=str(Path(__file__).resolve().parents[1] /
 parser.add_argument('--project', default=str(Path(__file__).resolve().parents[1]))
 parser.add_argument('--latency', action='store_true')
 parser.add_argument('--capacity', action='store_true')
+parser.add_argument('--destroy', action='store_true')
 parser.add_argument('--prediction', action='store_true')
 parser.add_argument('--lag-compensation', action='store_true')
 parser.add_argument('--delay-ms', type=float, default=40)
@@ -69,7 +70,7 @@ with tempfile.TemporaryDirectory(prefix='brassline-test-') as folder:
             log_path = Path(folder) / (role + '.log')
             log = log_path.open('w')
             command = [args.godot, '--headless', '--path', args.project, '--',
-                       '--capacity-test' if args.capacity else ('--lagcomp-test' if args.lag_compensation else ('--prediction-test' if args.prediction else '--network-test')),
+                       '--destroy-test' if args.destroy else ('--capacity-test' if args.capacity else ('--lagcomp-test' if args.lag_compensation else ('--prediction-test' if args.prediction else '--network-test'))),
                        '--role=' + role, '--coord=' + folder, '--client-fps=' + str(args.client_fps),
                        '--join-port=' + ('27918' if args.latency else '27917')]
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
@@ -90,7 +91,7 @@ with tempfile.TemporaryDirectory(prefix='brassline-test-') as folder:
             output = log_path.read_text(errors='replace')
             print(role, 'exit', process.returncode)
             print(output)
-            failed |= process.returncode != 0 or 'FAIL ' in output or 'ERROR:' in output or '_RESULT ' not in output
+            failed |= process.returncode != 0 or 'FAIL ' in output or 'ERROR:' in output or ('_RESULT ' not in output and 'DESTROY_RESULT_TEST ' not in output)
     if args.latency:
         print('PROXY_METRICS', metrics)
 raise SystemExit(1 if failed else 0)
