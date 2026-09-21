@@ -28,11 +28,12 @@ func build(owner_menu: Node) -> void:
  refresh()
 func choose(id: String) -> void:
  var game=menu.game
- var training=game.active and game.mode=="training" and not game.net.running
+ var training=game.mode=="training" and not game.net.running
  if not training and Loadouts.allowed(id,game.progression.xp_for("YOU"))!=id: return
  if training:
   game.player.set_class(id); game.player.refill(); game.player.viewmodel.update_pose(0)
   game.notify("TRAINING LOADOUT",Loadouts.CLASSES[id].weapon.name)
+  game.set_active(true)
  # Trials never persist a locked online loadout.
  if Loadouts.allowed(id,game.progression.xp_for("YOU"))==id:
   game.prefs.data.selected_class=id; game.save_profile(); game.net.select_class(id)
@@ -53,7 +54,7 @@ func refresh() -> void:
  xp_bar.value=100 if level==1000 else 100.0*(xp-floor_xp)/maxi(1,goal-floor_xp)
  for id in buttons:
   var unlocked=Loadouts.allowed(id,xp)==id
-  var trial=game.active and game.mode=="training" and not game.net.running
+  var trial=game.mode=="training" and not game.net.running
   buttons[id].disabled=not unlocked and not trial
   buttons[id].text=("SELECTED" if game.prefs.data.selected_class==id else "EQUIP NEXT LIFE") if unlocked else ("TRY IN TRAINING" if trial else "UNLOCK AT LEVEL %d" % Loadouts.CLASSES[id].level)
 func _process(_delta: float) -> void:

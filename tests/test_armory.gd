@@ -33,6 +33,10 @@ func run(g: Node) -> void:
 func unit_test() -> void:
  await game.start_mode("training")
  var p=game.player; p.set_physics_process(false); p.set_process(false)
+ game.set_active(false)
+ var armory=game.hud.menu.get_children().filter(func(node): return node.get_script()==preload("res://scripts/loadout_menu.gd"))[0]
+ armory.choose("raider")
+ check(game.active and p.class_id=="raider" and game.prefs.data.selected_class=="vanguard","Paused training can try a locked class without persisting an unlock")
  for id in Loadouts.IDS:
   var spec=Loadouts.CLASSES[id]
   var threshold=Loadouts.Progress.threshold(spec.level)
