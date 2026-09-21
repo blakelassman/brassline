@@ -30,3 +30,5 @@ python tests/run_multiplayer.py --godot GODOT --killcams --latency
 ```
 
 Protocol 15: update host and friends together. Profile version and save location stay unchanged.
+
+0.14.0 follow-up: Compatibility does not support FXAA. Balanced now uses 2x MSAA; see GAMEPLAY_FEEL.md. The post-replay Destroy intermission is now three seconds.

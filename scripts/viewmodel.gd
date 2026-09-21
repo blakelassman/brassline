@@ -2,6 +2,9 @@ extends Node
 ## A separate transparent 3D pass keeps the hands and weapons in front of cover.
 const Geo = preload("res://scripts/geo.gd")
 const Rules = preload("res://scripts/rules.gd")
+var shown_weapon=0
+var shown_grenade=""
+var swap_lower=0.0
 var aim_blend = 0.0
 var motion_blend = 0.0
 var visual_phase = 0.0
@@ -160,6 +163,19 @@ func _ready() -> void:
 
 func update_pose(delta: float) -> void:
 	var aiming = player.is_aiming()
+	if delta<=0:
+		shown_weapon=player.weapon; shown_grenade=player.held_grenade; swap_lower=0
+	elif shown_weapon!=player.weapon or shown_grenade!=player.held_grenade:
+		swap_lower=move_toward(swap_lower,1,delta/.06)
+		if swap_lower>=1:
+			shown_weapon=player.weapon; shown_grenade=player.held_grenade
+	else:
+		swap_lower=move_toward(swap_lower,0,delta/.14)
+	var reload_visual=visual_remaining(player.reload_timer)
+	var cycle_visual=visual_remaining(player.sniper_cycle)
+	var parry_visual=visual_remaining(player.parry_timer)
+	var swing_visual=visual_remaining(player.swing_timer)
+	var throw_visual=visual_remaining(player.throw_pose)
 	root.visible = player.health>0 and not (player.weapon == 3 and player.scope_age >= Rules.SCOPE_READY and player.held_grenade.is_empty())
 	if delta<=0:
 		aim_blend=1.0 if aiming else 0.0
@@ -189,28 +205,28 @@ func update_pose(delta: float) -> void:
 		casings = casings.filter(func(shell): return shell.life>0)
 	var moving = motion_blend*float(player.game.prefs.data.weapon_motion)*(1-aim_blend*.65)
 	var bob = sin(visual_phase*2)*.009*moving
-	var draw = clampf(player.equip_cooldown/.22,0,1)
+	var draw = smoothstep(0,1,swap_lower)
 	root.position = Vector3(lerpf(.36,.29,aim_blend),-.30+bob-land_blend*.08*float(player.game.prefs.data.weapon_motion),-.62+recoil_position*.10)
 	root.position += Vector3(sin(visual_phase)*.009*moving,0,0)
 	root.position += Vector3(-player.look_sway.x,-player.look_sway.y,0)
 	root.position.y -= draw*draw*.34
 	root.rotation = Vector3(recoil_position*.15+draw*.5+player.look_sway.y,-player.look_sway.x,cos(visual_phase)*.018*moving+strafe_roll*float(player.game.prefs.data.weapon_motion))
-	root.scale = Vector3.ONE*.83
+	root.scale = Vector3.ONE*.78
 	for i in range(models.size()):
 		flashes[i].visible = flash_time>0 and i==player.weapon and i!=2
-		models[i].visible = i == player.weapon and player.held_grenade.is_empty()
+		models[i].visible = i == shown_weapon and shown_grenade.is_empty()
 		magazines[i].position = mag_origins[i]
 		magazines[i].rotation = Vector3.ZERO
 		support_hands[i].position = Vector3(-.035,-.13,-.22)
 		support_hands[i].visible = i != 1 and i != 2
 		bolts[i].position.z = player.visual_kick*.06 if i == 1 else 0.0
-	grenade_model.visible = not player.held_grenade.is_empty()
-	grenade_shell.material_override.albedo_color = Color("efb447") if player.held_grenade == "blast" else Color("80bfb9")
-	if player.reload_timer > 0:
-		var progress = 1.0-player.reload_timer/float(player.weapon_stats()["reload"])
+	grenade_model.visible = not shown_grenade.is_empty()
+	grenade_shell.material_override.albedo_color = Color("efb447") if shown_grenade == "blast" else Color("80bfb9")
+	if reload_visual > 0:
+		var progress = 1.0-reload_visual/float(player.weapon_stats()["reload"])
 		var tilt = sin(PI*progress)
-		root.rotation += Vector3(-.25*tilt,.08*tilt,.72*tilt)
-		root.position += Vector3(-.15*tilt,.09*tilt,-.13*tilt)
+		root.rotation += Vector3(-.12*tilt,.06*tilt,.48*tilt)
+		root.position += Vector3(-.06*tilt,-.035*tilt,-.04*tilt)
 		# Remove the magazine, dip it below frame, seat it, then rack the action.
 		var travel = smoothstep(.12,.35,progress)*(1.0-smoothstep(.48,.72,progress))
 		var mag = magazines[player.weapon]
@@ -220,23 +236,27 @@ func update_pose(delta: float) -> void:
 		hand.visible = true
 		hand.position = Vector3(-.035,-.13,-.22).lerp(mag.position+Vector3(-.07,-.04,.09),smoothstep(.04,.16,progress)*(1-smoothstep(.76,.94,progress)))
 		bolts[player.weapon].position.z = .10*sin(PI*clampf((progress-.78)/.2,0,1))
-	elif player.weapon == 3 and player.sniper_cycle > 0:
-		var cycle = 1.0-player.sniper_cycle/1.1
+	elif player.weapon == 3 and cycle_visual > 0:
+		var cycle = 1.0-cycle_visual/1.1
 		var motion = sin(PI*clampf((cycle-.12)/.78,0,1))
 		bolts[3].position.z = .14*motion
 		root.rotation.z = -.075*motion
 		root.position.y -= .035*motion
 		support_hands[3].position = Vector3(.08,-.05,.04)+Vector3(0,0,.14*motion)
-	if player.parry_timer > 0:
-		var guard = smoothstep(0,.06,player.parry_timer)
+	if parry_visual > 0:
+		var guard = minf(smoothstep(0,.05,.28-parry_visual),smoothstep(0,.06,parry_visual))
 		root.rotation += Vector3(.12,.4,1.1)*guard
 		root.position += Vector3(-.26,.17,.12)*guard
-	if player.swing_timer > 0:
-		var slash = sin(PI*clampf((.5-player.swing_timer)/.38,0,1))
+	if swing_visual > 0:
+		var slash = sin(PI*clampf((.5-swing_visual)/.38,0,1))
 		root.rotation += Vector3(-.18*slash,-.5*slash,-1.2*slash)
 		root.position.x -= .42*slash
-	if player.throw_pose > 0:
-		root.position.y -= sin(player.throw_pose*PI/.3)*.20
+	if throw_visual > 0:
+		root.position.y -= sin(throw_visual*PI/.3)*.20
+
+func visual_remaining(timer: float) -> float:
+	# Extrapolate presentation only; ammo and cooldowns remain fixed-tick state.
+	return maxf(0,timer-Engine.get_physics_interpolation_fraction()/Engine.physics_ticks_per_second)
 
 func make_hand(parent: Node3D, at: Vector3) -> Node3D:
 	var hand = Node3D.new()

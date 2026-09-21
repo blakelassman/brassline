@@ -6,6 +6,7 @@ var root: Node3D
 var particles: Array = []
 var marks: Array[Node3D] = []
 var bodies: Array = []
+var fading_shaders: Dictionary = {}
 var rng = RandomNumberGenerator.new()
 func _ready() -> void:
 	root = Node3D.new()
@@ -50,13 +51,22 @@ func fall(visual: Node3D) -> void:
 	fade_materials(copy,mats)
 	bodies.append({"node":copy,"life":.8,"materials":mats})
 func fade_materials(node: Node, mats: Array) -> void:
-	if node is MeshInstance3D:
-		var mat = node.material_override.duplicate() as StandardMaterial3D
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		node.material_override = mat
+	if node is MeshInstance3D and node.material_override!=null:
+		var mat=node.material_override.duplicate()
+		if mat is StandardMaterial3D:
+			mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+		elif mat is ShaderMaterial:
+			var source=mat.shader
+			if not fading_shaders.has(source):
+				var fading=Shader.new()
+				fading.code=source.code.replace("void fragment() {","uniform float corpse_alpha = 1.0;\nvoid fragment() {\n ALPHA = corpse_alpha;")
+				fading_shaders[source]=fading
+			mat.shader=fading_shaders[source]
+			mat.set_shader_parameter("corpse_alpha",1.0)
+		node.material_override=mat
 		mats.append(mat)
 	for child in node.get_children(): fade_materials(child,mats)
-func _physics_process(delta: float) -> void:
+func _process(delta: float) -> void:
 	if not game.active: return
 	for item in particles:
 		item.life -= delta
@@ -68,7 +78,10 @@ func _physics_process(delta: float) -> void:
 	particles = particles.filter(func(p): return p.life>0)
 	for body in bodies:
 		body.life -= delta
-		body.node.rotation.x = lerpf(body.node.rotation.x,-1.25,delta*8)
-		for mat in body.materials: mat.albedo_color.a = clampf(body.life/.35,0,1)
+		body.node.rotation.x = lerpf(body.node.rotation.x,-1.25,1-exp(-8*delta))
+		for mat in body.materials:
+			var opacity=clampf(body.life/.35,0,1)
+			if mat is StandardMaterial3D: mat.albedo_color.a=opacity
+			elif mat is ShaderMaterial: mat.set_shader_parameter("corpse_alpha",opacity)
 		if body.life<=0: body.node.queue_free()
 	bodies = bodies.filter(func(b): return b.life>0)

@@ -131,6 +131,8 @@ func _ready() -> void:
 		call_deferred("_lagcomp_test")
 	elif "--prediction-test" in args:
 		call_deferred("_prediction_test")
+	elif "--feel-test" in args:
+		call_deferred("_feel_test")
 	elif "--presentation-test" in args:
 		call_deferred("_presentation_test")
 	elif "--armory-test" in args:
@@ -161,7 +163,7 @@ func _ready() -> void:
 		call_deferred("_self_test")
 	elif Array(args).any(func(arg): return arg.begins_with("--capture")):
 		call_deferred("_capture")
-	print("BRASSLINE ready | multiplayer prototype 0.13.1 | Godot ", Engine.get_version_info()["string"])
+	print("BRASSLINE ready | multiplayer prototype 0.14.0 | Godot ", Engine.get_version_info()["string"])
 
 func _training_targets() -> void:
 	var names = ["WALL PEEK","STRAFE","HIGH GROUND","CLOSE RANGE","TEAMMATE","COLLATERAL A","COLLATERAL B"]
@@ -303,6 +305,7 @@ func set_active(value: bool) -> void:
 	hud.resume_button.visible = has_started
 	if net.running:
 		player.fire_requested = false
+		player.toss_buffer=0
 		player.jump_requested = false
 		player.blast_requested = false
 		player.smoke_requested = false
@@ -322,6 +325,7 @@ func set_active(value: bool) -> void:
 		sound_player.stream_paused = not value
 	# Drop pending actions across pause; opening a menu must not buffer a shot.
 	player.fire_requested = false
+	player.toss_buffer=0
 	player.jump_requested = false
 	player.blast_requested = false
 	player.smoke_requested = false
@@ -912,8 +916,12 @@ func apply_settings() -> void:
 	player.sensitivity = prefs.data.sensitivity
 	audio_mix.apply(prefs.data)
 	Engine.max_fps = int(prefs.data.fps_limit)
-	get_viewport().msaa_3d = Viewport.MSAA_2X if prefs.data.quality==2 else Viewport.MSAA_DISABLED
-	get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if prefs.data.quality==1 else Viewport.SCREEN_SPACE_AA_DISABLED
+	get_viewport().msaa_3d = Viewport.MSAA_2X if prefs.data.quality>=1 else Viewport.MSAA_DISABLED
+	get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED # FXAA is unsupported by Compatibility.
+	player.viewmodel.viewport.msaa_3d=Viewport.MSAA_DISABLED if prefs.data.quality==0 else Viewport.MSAA_2X
+	replays.viewport.msaa_3d=get_viewport().msaa_3d
+	replays.viewport.screen_space_aa=get_viewport().screen_space_aa
+	_apply_render_resolution()
 	for light in world_root.find_children("*","DirectionalLight3D",true,false):
 		light.shadow_enabled = prefs.data.quality>=1
 		light.directional_shadow_mode=DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS if prefs.data.quality==2 else DirectionalLight3D.SHADOW_ORTHOGONAL
@@ -947,6 +955,7 @@ func _apply_render_resolution() -> void:
 	var window = get_window()
 	var play_height = minf(window.size.y,window.size.x*9.0/16.0)
 	window.scaling_3d_scale = clampf(minf(prefs.data.resolution_height,prefs.data.resolution_width*9.0/16.0)/maxf(1,play_height),.25,1.0) if prefs.data.fullscreen else 1.0
+	window.scaling_3d_scale*=float(prefs.data.render_scale)
 func _dedicated_server() -> void:
 	var config = ConfigFile.new()
 	config.load("res://server.cfg")
@@ -1012,3 +1021,8 @@ func _presentation_test() -> void:
 	var suite=load("res://tests/test_presentation.gd").new()
 	add_child(suite)
 	suite.run(self)
+
+func _feel_test() -> void:
+	var suite=load("res://tests/test_feel.gd").new()
+	add_child(suite)
+	await suite.run(self)

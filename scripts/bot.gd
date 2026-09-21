@@ -23,6 +23,7 @@ var reload_time = 0.0
 var path = PackedVector3Array()
 var path_cursor = 0
 var route_timer = 0.0
+var wall_stall=0.0
 var goal = Vector3.ZERO
 var seen_position = Vector3.ZERO
 var memory_time = 0.0
@@ -43,7 +44,7 @@ func _ready() -> void:
 	scan_timer = bot_index*.025
 	goal = combat.patrol_goal()
 	weapon_node = Node3D.new()
-	add_child(weapon_node)
+	rig.root.add_child(weapon_node)
 	var gun = preload("res://scripts/weapon_art.gd").world(weapon_node,0)
 	gun.position = Vector3(.28,1.1,.32)
 	gun.rotation.y = PI
@@ -71,14 +72,19 @@ func reset() -> void:
 	burst = 0
 	rounds = 24
 	reload_time = 0
+	muzzle_time=0
+	if is_instance_valid(muzzle): muzzle.hide()
+	if is_instance_valid(weapon_node): weapon_node.rotation=Vector3.ZERO
 	opponent = null
 	memory_time = 0
 	path.clear()
 	route_timer = 0
+	wall_stall=0
 	goal = combat.patrol_goal()
 	combat.respawns += 1
 
 func _physics_process(delta: float) -> void:
+	presentation.begin_tick(global_transform)
 	if not game.active or (game.net.running and not game.net.combat_allowed()) or game.mode not in ["combat","online"]:
 		return
 	if health<=0:
@@ -111,7 +117,7 @@ func _physics_process(delta: float) -> void:
 		offset.y = 0
 		var distance = offset.length()
 		if distance>.05:
-			look_at(global_position+offset,Vector3.UP,true)
+			rotation.y=lerp_angle(rotation.y,atan2(offset.x,offset.z),1-exp(-12*delta))
 		strafe_timer -= delta
 		if strafe_timer<=0:
 			strafe_timer = rng.randf_range(.8,1.6)
@@ -125,7 +131,7 @@ func _physics_process(delta: float) -> void:
 			if distance<profile.near or reload_time>0:
 				movement -= offset.normalized()*1.4
 		if urgent: movement = route_toward(objective.bot_goal(self),delta)
-		if reaction<=0 and shot_timer<=0 and reload_time<=0:
+		if reaction<=0 and shot_timer<=0 and reload_time<=0 and global_basis.z.dot(offset.normalized())>.90:
 			combat.shoot_bot(self,opponent.global_position+Vector3.UP*1.02)
 			rounds -= 1
 			burst += 1
@@ -145,7 +151,7 @@ func _physics_process(delta: float) -> void:
 			goal = combat.patrol_goal()
 		movement = route_toward(goal,delta)
 		if movement.length()>.1:
-			look_at(global_position+movement,Vector3.UP,true)
+			rotation.y=lerp_angle(rotation.y,atan2(movement.x,movement.z),1-exp(-10*delta))
 	if interacting: movement = Vector3.ZERO
 	# Local separation prevents a group from choosing the same walking line.
 	for actor in combat.actors():
@@ -160,17 +166,25 @@ func _physics_process(delta: float) -> void:
 	velocity.z = move_toward(velocity.z,movement.z,18*delta)
 	velocity.y -= 24*delta
 	move_and_slide()
-	if is_on_wall():
-		strafe_sign *= -1
-		route_timer = 0
+	presentation.end_tick(global_transform)
+	if is_on_wall() and movement.length_squared()>.25:
+		wall_stall+=delta
+		if wall_stall>=.25:
+			strafe_sign *= -1
+			route_timer=0
+			wall_stall=0
+	else:
+		wall_stall=0
 	impact_pose = maxf(0,impact_pose-delta*4)
-	Rig.animate(rig,Vector2(velocity.x,velocity.z).length(),time,impact_pose,reload_time,muzzle_time,true)
-	weapon_node.rotation.x = -muzzle_time*.7
-	weapon_node.rotation.z = sin(reload_time*3)*.15 if reload_time>0 else 0
 	step_clock += delta*Vector2(velocity.x,velocity.z).length()
 	if step_clock>2.2 and is_on_floor():
 		step_clock = 0
 		game.world_sound("step_"+game.surface_at(global_position),global_position,-27)
+
+func animate_pose(delta: float) -> void:
+	Rig.animate(rig,presentation_speed(),pose_clock,impact_pose,reload_time,muzzle_time,true)
+	weapon_node.rotation.x=lerpf(weapon_node.rotation.x,-muzzle_time*.7,1-exp(-25*delta))
+	weapon_node.rotation.z=lerpf(weapon_node.rotation.z,sin(reload_time*3)*.15 if reload_time>0 else 0.0,1-exp(-18*delta))
 
 func acquire_target() -> void:
 	var best: Node3D = null
@@ -192,6 +206,18 @@ func route_toward(destination: Vector3, delta: float) -> Vector3:
 		route_timer = .8+rng.randf()*.35
 		path = combat.path_between(global_position,destination)
 		path_cursor = 1 if path.size()>1 else 0
+		# Skip grid corners only when the full standing capsule has a clear route.
+		# Elevated waypoints remain explicit so a shortcut cannot bypass a ramp.
+		for index in range(mini(path.size()-1,path_cursor+4),path_cursor,-1):
+			if absf(path[index].y-global_position.y)>.15: continue
+			var query=PhysicsShapeQueryParameters3D.new()
+			var shape=CapsuleShape3D.new(); shape.radius=.38; shape.height=1.8
+			query.shape=shape; query.collision_mask=1
+			query.transform=Transform3D(Basis.IDENTITY,global_position+Vector3.UP*.93)
+			query.motion=path[index]-global_position; query.motion.y=0
+			var sweep=get_world_3d().direct_space_state.cast_motion(query)
+			if sweep.size()==2 and sweep[0]>=.999:
+				path_cursor=index; break
 	while path_cursor<path.size() and Vector2(path[path_cursor].x-position.x,path[path_cursor].z-position.z).length()<.35:
 		path_cursor += 1
 	if path_cursor>=path.size():

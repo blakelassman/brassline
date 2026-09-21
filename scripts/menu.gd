@@ -33,7 +33,7 @@ func _ready() -> void:
 	var top = HBoxContainer.new()
 	shell.add_child(top)
 	label(top,"BRASSLINE",46,ink).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label(top,"MULTIPLAYER  /  0.13.1",15,gold)
+	label(top,"MULTIPLAYER  /  0.14.0",15,gold)
 	var columns = HBoxContainer.new()
 	columns.add_theme_constant_override("separation",32)
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -221,12 +221,13 @@ func _build_settings(page: VBoxContainer) -> void:
 	label(rows,"The background stays faint. Set it to zero for a silent backdrop.",14,muted)
 	label(rows,"GRAPHICS",13,muted)
 	var quality = OptionButton.new()
-	for name in ["LOW","BALANCED","HIGH / shadows + anti-aliasing"]: quality.add_item(name)
+	for name in ["LOW","BALANCED / 2x AA","HIGH / extended shadows"]: quality.add_item(name)
 	quality.selected = game.prefs.data.quality
 	quality.custom_minimum_size.y = 42
 	quality.item_selected.connect(func(index): game.prefs.data.quality = index; _settings_changed())
 	rows.add_child(quality)
 	_slider(rows,"Frame rate cap","fps_limit",30,240,1)
+	_slider(rows,"3D render scale (HUD stays sharp)","render_scale",.5,1.0,.05)
 	var fullscreen = CheckButton.new()
 	fullscreen.text = "Fullscreen (borderless)"
 	fullscreen.button_pressed = game.prefs.data.fullscreen

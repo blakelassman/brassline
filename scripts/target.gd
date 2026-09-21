@@ -2,6 +2,8 @@ extends CharacterBody3D
 
 const Rig = preload("res://scripts/rig.gd")
 var rig: Dictionary = {}
+var presentation=preload("res://scripts/actor_presentation.gd").new()
+var pose_clock=0.0
 var visual_variant = 0
 var impact_pose = 0.0
 
@@ -38,6 +40,7 @@ func _ready() -> void:
 	title.visibility_range_begin = 1.5
 	title.visibility_range_end = 32
 	_refresh_label()
+	presentation.reset(global_transform)
 
 func _hitbox(zone: String, pos: Vector3, head: bool) -> void:
 	var area = Area3D.new()
@@ -59,7 +62,21 @@ func _hitbox(zone: String, pos: Vector3, head: bool) -> void:
 	area.position = pos
 	hitboxes.append(area)
 
+func _process(delta: float) -> void:
+	if not game.active or game.net.dedicated or health<=0: return
+	pose_clock+=delta
+	presentation.apply(rig.root,self,Engine.get_physics_interpolation_fraction())
+	title.global_position=rig.root.global_position+Vector3.UP*2.18
+	animate_pose(delta)
+
+func presentation_speed() -> float:
+	return 0.0 if game.net.running and not game.net.combat_allowed() else Vector2(velocity.x,velocity.z).length()
+
+func animate_pose(_delta: float) -> void:
+	Rig.animate(rig,presentation_speed(),pose_clock,impact_pose,0,0,false)
+
 func _physics_process(delta: float) -> void:
+	presentation.begin_tick(global_transform)
 	if not game.active:
 		return
 	if health <= 0:
@@ -69,13 +86,13 @@ func _physics_process(delta: float) -> void:
 		return
 	time += delta
 	impact_pose = maxf(0,impact_pose-delta*4)
-	Rig.animate(rig,velocity.length(),time,impact_pose,0,0,false)
 	if moving:
 		velocity.x = (anchor.x + sin(time * 1.2) * 2.4 - position.x) * 6.0
 	else:
 		velocity.x = 0
 	velocity.y -= 24.0 * delta
 	move_and_slide()
+	presentation.end_tick(global_transform)
 
 func take_damage(amount: int, source_team: int) -> bool:
 	if source_team == team or health <= 0:
@@ -97,6 +114,9 @@ func reset() -> void:
 	health = 100
 	dead_time = 0.0
 	position = anchor
+	presentation.reset(global_transform)
+	rig.root.transform=Transform3D.IDENTITY
+	rig.erase("animation")
 	velocity = Vector3.ZERO
 	visible = true
 	collision_layer = 4
