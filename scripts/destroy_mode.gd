@@ -5,7 +5,7 @@ const BOMB_SECONDS = 60.0
 const PLANT_SECONDS = 4.0
 const DEFUSE_SECONDS = 8.0
 const INTERMISSION = 6.0
-const WINS = 3
+const WINS = 6
 const SITES = [Vector3(-21,.05,-9),Vector3(21,.05,-9)]
 var net: Node
 var phase = "live"
@@ -52,7 +52,7 @@ func start_round() -> void:
 	net.final_replay_until=0
 	phase = "reset"
 	net._balance_humans()
-	if round_index==3: attackers = 2
+	attackers = 1 if round_index<=5 else 2
 	net.game._clear_effects()
 	net.game.radar.clear()
 	net.lag_comp.clear()

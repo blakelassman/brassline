@@ -59,7 +59,7 @@ func unit_test() -> void:
 	check(replay.active and not replay.final and victim.health==0,"Offline death starts skippable replay without respawning underneath it")
 	check(replay.viewport.world_3d!=game.get_world_3d(),"Replay uses its own 3D world")
 	check(replay.camera.position.distance_to(killer.position+Vector3.UP*1.38)<.4,"Replay camera starts at killer's recorded first-person eye")
-	check(replay.clip.frames.size()<=62 and replay.clip.events.size()==1,"Clip contains bounded pre-roll and the actual lethal shot")
+	check(replay.clip.frames.size()<=82 and replay.clip.events.size()==1,"Clip contains bounded pre-roll and the actual lethal shot")
 	check(replay.clip.victim_life==victim.life_id,"Clip is tied to the victim's exact life")
 	var recorded=replay.clip.duplicate(true)
 	var packed=replay.History.encode(recorded)
@@ -91,8 +91,9 @@ func unit_test() -> void:
 	check(Engine.time_scale==previous and killer.position==snapshot,"Slow motion never changes global simulation speed or actor state")
 	replay.cursor=recorded.time; replay.advance(.1)
 	check(replay.hit_played and replay.ghosts[recorded.victim].rig.root.rotation.x>0,"Lethal hit confirmation and recorded victim fall play at the finish")
-	replay.advance(.7)
+	replay.advance(.71)
 	check(not replay.active,"Final killcam finishes automatically after the finishing hit")
+	check(replay.fade_alpha()>.99,"Final playback returns through a fade instead of a hard camera cut")
 	check(not replay.play(recorded,true),"Duplicate final packet cannot replay the final kill again")
 	# Capture at death, before the bot's deferred instant respawn changes position/life.
 	replay.reset(); victim.health=100
@@ -133,6 +134,21 @@ func unit_test() -> void:
 	check(replay.deaths.has(collateral) and replay.ghosts[collateral].rig.root.rotation.x>0,"Collateral victims also fall in the final replay")
 	replay.reset()
 	check(not replay.active and replay.history.last_clip.is_empty() and replay.ghosts.is_empty(),"Map/session reset releases ghosts and old final-kill state")
+	# Short lives and long lives have identical playback windows; finals run longer.
+	for short in [false,true]:
+		for mandatory in [false,true]:
+			replay.reset(); victim.health=0
+			var timed=recorded.duplicate(true)
+			if short: timed.frames=[timed.frames[-1]]
+			timed.events.push_front([timed.time-3.5,timed.killer,Vector3.ZERO,Vector3.ONE,0])
+			replay.play(timed,mandatory)
+			if not mandatory: check(replay.event_index==1,"Normal replay skips shot audio preceding its three-second window")
+			var expected=6.75 if mandatory else 3.65
+			replay.advance(expected-.01)
+			check(replay.active,"Replay keeps its full duration (short=%s final=%s)" % [short,mandatory])
+			replay.advance(.02)
+			check(not replay.active,"Replay ends on time (short=%s final=%s)" % [short,mandatory])
+	replay.reset(); victim.health=100
 	# Finals delay actual objective round progression, even when death cams are off.
 	await game.net.host(27926,"",false,"destroy"); freeze()
 	var n=game.net
@@ -143,7 +159,11 @@ func unit_test() -> void:
 	n.record_kill("S0","RIFLE",false,false,1,"S5",2,false)
 	n.destroy.finish(2,"ATTACKERS ELIMINATED")
 	await get_tree().process_frame
-	check(replay.active and replay.final and n.final_replay_until>game.clock,"Destroy round end overrides ordinary death replay with a mandatory final")
+	check(replay.transitioning() and not replay.active,"Round end presents the result before cutting to the replay")
+	replay._process(replay.OUTRO_SECONDS-.15)
+	check(replay.transitioning() and replay.fade_alpha()>.4,"Round result fades to black before the camera change")
+	replay._process(.16)
+	check(replay.active and replay.final and n.final_replay_until>game.clock,"Destroy round end transitions into its mandatory final")
 	check(n.destroy.next_round_at>=n.final_replay_until+n.destroy.INTERMISSION-.01,"Next objective round waits until after final replay and result interval")
 	n.finish_death_replay()
 	check(victim.health==0,"Skipping a replay never revives a Destroy player mid-round")

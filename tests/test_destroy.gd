@@ -98,8 +98,13 @@ func rules_test() -> void:
 	d.deadline=game.clock; d.tick(.016)
 	check(game.combat.scores[2]==2 and d.reason=="TIME EXPIRED","Unplanted timeout gives defenders the round")
 	advance(6.1); freeze()
-	check(d.round_index==3 and d.attackers==2,"Halftime switches roles after round two")
-	check(net.slots[0].team==1 and game.combat.scores==[0,0,2],"Halftime preserves team identity and scores")
+	check(d.round_index==3 and d.attackers==1,"First half continues beyond two rounds")
+	for i in range(3):
+		d.deadline=game.clock; d.tick(.016)
+		check(net.round_active,"Match remains live below six wins")
+		advance(6.1); freeze()
+	check(d.round_index==6 and d.attackers==2,"Halftime switches roles after round five")
+	check(net.slots[0].team==1 and game.combat.scores==[0,0,5],"Halftime preserves team identity and scores")
 	# Bot planting on B, then deadline precedence over a nearly completed defuse.
 	d.carrier=5; d.plan_site=1
 	ground(net.slots[5].actor,d.SITES[1]); advance(4.1)
@@ -108,7 +113,7 @@ func rules_test() -> void:
 	d.work=7.99; d.worker=0; d.work_origin=game.player.position
 	d.deadline=game.clock; d.tick(.02); Input.action_release("interact")
 	check(d.reason=="BOMB DETONATED" and game.player.health==0,"Bomb explodes with lethal radius; deadline wins defuse tie")
-	check(not net.round_active and game.combat.scores[2]==3,"First to three immediately ends best-of-five match")
+	check(not net.round_active and game.combat.scores[2]==6,"Sixth win ends the best-of-eleven match")
 	check(net.vote_end>game.clock,"Match end opens existing map voting")
 	var score = game.combat.scores.duplicate(); d.tick(1)
 	check(game.combat.scores==score,"Round resolution cannot score twice")
@@ -190,7 +195,7 @@ func host_test() -> void:
 	mark("defused")
 	check(await wait_for(func(): return marked("saw_score")),"Client receives objective result and round score")
 	# Finish series and exercise shared map vote/load path.
-	d.start_round(); freeze(); game.combat.scores=[0,0,2]; d.finish(2,"BOMB DEFUSED")
+	d.start_round(); freeze(); game.combat.scores=[0,0,5]; d.finish(2,"BOMB DEFUSED")
 	mark("vote")
 	n.vote(1)
 	check(await wait_for(func(): return n.vote_counts[1]==2),"Destroy mode accepts both map votes")

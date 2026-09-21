@@ -8,7 +8,12 @@ const Collection = preload("res://scripts/cosmetics.gd")
 const AFTER_HIT = .65
 const SLOW_WINDOW = .65
 const SLOW_RATE = .25
-const FINAL_LOCK = 6.5
+const REGULAR_PRE_ROLL = 3.0
+const FINAL_PRE_ROLL = 4.0
+const FINAL_AFTER_HIT = .8
+const OUTRO_SECONDS = 1.2
+const FADE_SECONDS = .3
+const FINAL_LOCK = 9.0
 const DEATH_TIMEOUT = 5.0
 var game: Node
 var history = History.new()
@@ -19,6 +24,10 @@ var saved_disable_3d = false
 var saved_weapon_update = SubViewport.UPDATE_ALWAYS
 var deaths: Dictionary = {}
 var skip_ready = true
+var pending_final: Dictionary = {}
+var outro_left = 0.0
+var outro_title = ""
+var return_fade = 0.0
 var active = false
 var final = false
 var clip: Dictionary = {}
@@ -109,13 +118,29 @@ func flush() -> void:
 			play(recorded,false)
 func has_final() -> bool:
 	return not history.pending.is_empty() or not history.last_clip.is_empty()
+func present_final(recorded: Dictionary, title: String) -> void:
+	if recorded.is_empty() or recorded.map!=game.current_map or recorded.id<=last_final_id: return
+	if not pending_final.is_empty() and recorded.id<=pending_final.id: return
+	stop(false)
+	pending_final=recorded.duplicate(true)
+	outro_left=OUTRO_SECONDS
+	outro_title=title
+func transitioning() -> bool:
+	return not pending_final.is_empty()
+func fade_alpha() -> float:
+	if transitioning(): return clampf(1.0-outro_left/FADE_SECONDS,0,1)
+	if active:
+		var entry=clampf(1.0-elapsed/FADE_SECONDS,0,1)
+		var ending=clampf((finish_hold-(FINAL_AFTER_HIT-FADE_SECONDS))/FADE_SECONDS,0,1) if final else 0.0
+		return maxf(entry,ending)
+	return clampf(return_fade/FADE_SECONDS,0,1)
 func play(recorded: Dictionary, mandatory: bool) -> bool:
 	if recorded.is_empty() or recorded.map!=game.current_map: return false
 	if mandatory:
 		if recorded.id<=last_final_id: return false
 		last_final_id=recorded.id
 	else:
-		if active and final or recorded.id<=last_death_id or recorded.id<=last_final_id or game.player.health>0: return false
+		if transitioning() or active and final or recorded.id<=last_death_id or recorded.id<=last_final_id or game.player.health>0: return false
 		if not game.prefs.data.killcams: return false
 		last_death_id=recorded.id
 	stop(false)
@@ -133,7 +158,8 @@ func play(recorded: Dictionary, mandatory: bool) -> bool:
 			if row[4]<=0 and previous.has(row[0]) and previous[row[0]][0]>0 and previous[row[0]][1]==row[8]: deaths[row[0]]=[frame[0],row[8]]
 			previous[row[0]]=[row[4],row[8]]
 	deaths[clip.victim]=[clip.time,clip.victim_life]
-	cursor=clip.frames[0][0]; finish_hold=0; elapsed=0; event_index=0; hit_played=false; recoil=0
+	cursor=clip.time-(FINAL_PRE_ROLL if mandatory else REGULAR_PRE_ROLL); finish_hold=0; elapsed=0; event_index=0; hit_played=false; recoil=0
+	while event_index<clip.events.size() and clip.events[event_index][0]<cursor: event_index+=1
 	_build_world()
 	for id in clip.roster:
 		var root = Node3D.new(); scene.add_child(root)
@@ -174,6 +200,14 @@ func _copy_static(node: Node) -> void:
 		if copy is Node3D: copy.global_transform=node.global_transform
 	for child in node.get_children(): _copy_static(child)
 func _process(delta: float) -> void:
+	return_fade=maxf(0,return_fade-delta)
+	if transitioning():
+		outro_left=maxf(0,outro_left-delta)
+		if outro_left<=0:
+			var recorded=pending_final
+			pending_final={}
+			play(recorded,true)
+		return
 	if not active: return
 	elapsed+=delta
 	if not Input.is_action_pressed("jump"): skip_ready=true
@@ -182,18 +216,20 @@ func _process(delta: float) -> void:
 	advance(delta)
 func advance(delta: float) -> void:
 	if not active: return
-	# Slow only the final .65 seconds leading into the recorded lethal hit.
-	var end = float(clip.time)
-	playback_speed=SLOW_RATE if final and cursor>=end-SLOW_WINDOW else 1.0
-	var step = delta
-	if final and cursor<end-SLOW_WINDOW and cursor+step>end-SLOW_WINDOW:
-		var normal = end-SLOW_WINDOW-cursor
-		cursor += normal+(step-normal)*SLOW_RATE
-	else: cursor += step*playback_speed
-	if cursor>=end:
-		cursor=end; finish_hold+=delta
+	# Integrate real time across boundaries so duration is independent of frame rate.
+	var end=float(clip.time)
+	var remaining=delta
+	var slow_start=end-SLOW_WINDOW
+	if final and cursor<slow_start:
+		var normal=minf(remaining,slow_start-cursor)
+		cursor+=normal; remaining-=normal
+	playback_speed=SLOW_RATE if final and cursor>=slow_start else 1.0
+	if cursor<end:
+		var travel=minf(remaining,(end-cursor)/playback_speed)
+		cursor=minf(end,cursor+travel*playback_speed); remaining-=travel
+	if cursor>=end: finish_hold+=remaining
 	_render(delta)
-	if finish_hold>=AFTER_HIT: stop(true)
+	if finish_hold>=(FINAL_AFTER_HIT if final else AFTER_HIT): stop(true)
 func _render(delta: float) -> void:
 	if clip.is_empty(): return
 	var a = clip.frames[0]
@@ -303,8 +339,10 @@ func play_audio(key: String, volume: float) -> void:
 	speaker.pitch_scale=.7 if final and playback_speed<1 else 1.0
 	speaker.play()
 func stop(resume: bool = false) -> void:
+	pending_final={}; outro_left=0
 	var was_active=active
 	var was_final=final
+	if was_active and was_final and resume: return_fade=FADE_SECONDS
 	active=false; final=false; scoped=false
 	if was_active:
 		game.get_viewport().disable_3d=saved_disable_3d
@@ -328,6 +366,6 @@ func stop(resume: bool = false) -> void:
 		if game.net.running: game.net.finish_death_replay()
 		elif game.mode=="combat": game.combat.respawn_player()
 func reset() -> void:
-	stop(false); history.clear(); last_death_id=-1; last_final_id=-1; flush_queued=false
+	stop(false); return_fade=0; history.clear(); last_death_id=-1; last_final_id=-1; flush_queued=false
 	if is_instance_valid(scenery): scenery.queue_free(); scenery=null
 	cached_world_id=0
