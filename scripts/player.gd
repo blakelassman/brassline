@@ -1,5 +1,14 @@
 extends CharacterBody3D
 
+const Loadouts = preload("res://scripts/loadouts.gd")
+var class_id = "vanguard"
+func weapon_stats(index: int = -1) -> Dictionary:
+	return Loadouts.weapon(class_id,weapon if index<0 else index)
+func set_class(id: String) -> void:
+	if id==class_id: return
+	class_id=id if Loadouts.CLASSES.has(id) else "vanguard"
+	if is_instance_valid(viewmodel): viewmodel.apply_cosmetics()
+
 const Rules = preload("res://scripts/rules.gd")
 const Viewmodel = preload("res://scripts/viewmodel.gd")
 var cosmetics: Dictionary = {}
@@ -46,6 +55,7 @@ var parry_cooldown = 0.0
 var swing_timer = 0.0
 var swing_pending = false
 var fire_requested = false
+var fire_buffer = 0.0
 var jump_requested = false
 var blast_requested = false
 var smoke_requested = false
@@ -66,6 +76,11 @@ var correction_offset = Vector3.ZERO
 func _process(delta: float) -> void:
 	if not locally_controlled or camera==null or health<=0: return
 	correction_offset *= exp(-20*delta)
+	if game.active and not game.menu_open and not game.replays.active and not game.replays.transitioning():
+		look_sway=look_sway.lerp(Vector2.ZERO,1-exp(-12*delta))
+		var target_fov=32.0 if is_aiming() and weapon==3 else (70.0 if is_aiming() else 86.0)
+		camera.fov=move_toward(camera.fov,target_fov,450.0*delta)
+		viewmodel.update_pose(delta)
 	# Presentation smoothing never changes the authoritative collision capsule.
 	camera.position = Vector3(0,1.00 if crouched else 1.64,0)+global_basis.inverse()*correction_offset
 
@@ -98,7 +113,7 @@ func is_aiming() -> bool:
 	return health>0 and held_grenade.is_empty() and weapon != 2 and reload_timer <= 0.0 and equip_cooldown <= 0.0 and held("aim")
 
 func current_spread() -> float:
-	return Rules.spread_degrees(weapon, Vector2(velocity.x,velocity.z).length(), not is_on_floor(), scope_age)
+	return Rules.spread_degrees(weapon, Vector2(velocity.x,velocity.z).length(), not is_on_floor(), scope_age)*(float(weapon_stats().get("spread",1.0)) if weapon==0 else 1.0)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if locally_controlled and health>0 and not game.menu_open and game.net.is_destroy() and event.is_action_pressed("drop_bomb"):
@@ -134,7 +149,7 @@ func _physics_process(delta: float) -> void:
 	if locally_controlled and game.net.is_client_ready(): game.net.consume_reconciliation()
 	if not game.active or (game.net.running and not game.net.combat_allowed()):
 		return
-	look_sway = look_sway.lerp(Vector2.ZERO,1-exp(-12*delta))
+	if not locally_controlled: look_sway = look_sway.lerp(Vector2.ZERO,1-exp(-12*delta))
 	landing_pose = move_toward(landing_pose,0,delta*3)
 	hurt_flash = maxf(0,hurt_flash-delta)
 	if health<=0:
@@ -172,13 +187,16 @@ func _physics_process(delta: float) -> void:
 	smoke_requested = false
 	if fire_blocked_until_release and not held("fire"):
 		fire_blocked_until_release = false
+	fire_buffer=.10 if fire_requested else maxf(0,fire_buffer-delta)
 	if not held_grenade.is_empty():
 		if short_toss_requested:
 			throw_grenade(held_grenade,true)
 		elif fire_requested:
 			throw_grenade(held_grenade,false)
-	elif not fire_blocked_until_release and (fire_requested or (weapon == 0 and held("fire"))):
-		shoot()
+	elif not fire_blocked_until_release and (fire_buffer>0 or (weapon == 0 and weapon_stats().get("auto",true) and held("fire"))):
+		if fire_cooldown<=0 and equip_cooldown<=0 and reload_timer<=0:
+			fire_buffer=0
+			shoot()
 	fire_requested = false
 	short_toss_requested = false
 	if swing_timer > 0.0:
@@ -189,8 +207,9 @@ func _physics_process(delta: float) -> void:
 	var target_fov = 86.0
 	if aiming:
 		target_fov = 32.0 if weapon == 3 else 70.0
-	camera.fov = move_toward(camera.fov,target_fov,450.0*delta)
-	viewmodel.update_pose(delta)
+	if not locally_controlled:
+		camera.fov = move_toward(camera.fov,target_fov,450.0*delta)
+		viewmodel.update_pose(delta)
 
 func advance_weapon_state(delta: float) -> void:
 	rifle_idle += delta
@@ -211,14 +230,14 @@ func advance_weapon_state(delta: float) -> void:
 	throw_pose = maxf(0.0,throw_pose-delta)
 	visual_kick = move_toward(visual_kick, 0.0, delta * 4.0)
 	if reload_timer > 0.0:
-		var old_progress = 1.0 - reload_timer/float(Rules.WEAPONS[weapon]["reload"])
+		var old_progress = 1.0 - reload_timer/float(weapon_stats()["reload"])
 		reload_timer = maxf(0.0, reload_timer - delta)
-		var progress = 1.0 - reload_timer/float(Rules.WEAPONS[weapon]["reload"])
+		var progress = 1.0 - reload_timer/float(weapon_stats()["reload"])
 		for cue in [[.18,"mag_out"],[.70,"mag_in"],[.88,"slide"]]:
 			if old_progress < cue[0] and progress >= cue[0]:
 				play_sound(cue[1], -12.0)
 		if reload_timer == 0.0:
-			ammo[weapon] = Rules.WEAPONS[weapon]["mag"]
+			ammo[weapon] = weapon_stats()["mag"]
 	var aiming = is_aiming()
 	scope_age = scope_age + delta if aiming and weapon == 3 else 0.0
 
@@ -236,6 +255,7 @@ func equip(index: int) -> void:
 	network_action("equip",index)
 	held_grenade = ""
 	parry_timer = 0.0
+	fire_buffer=0
 	weapon = index
 	rifle_shots = 0
 	rifle_idle = 99.0
@@ -255,6 +275,7 @@ func equip_grenade(kind: String) -> void:
 		return
 	network_action("grenade",1 if kind=="smoke" else 0)
 	parry_timer = 0.0
+	fire_buffer=0
 	held_grenade = kind
 	rifle_shots = 0
 	rifle_idle = 99.0
@@ -285,7 +306,7 @@ func shoot() -> void:
 	if weapon==3:
 		sniper_cycle = 1.1
 	ammo[weapon] -= 1
-	fire_cooldown = Rules.WEAPONS[weapon]["cooldown"]
+	fire_cooldown = weapon_stats()["cooldown"]
 	var direction = -camera.global_basis.z
 	var spread = deg_to_rad(current_spread())
 	if spread > 0:
@@ -297,7 +318,7 @@ func shoot() -> void:
 	play_sound("sniper" if weapon == 3 else ("rifle" if weapon == 0 else "pistol"), -9.0 if weapon == 3 else -11.0)
 	visual_kick = .5 if weapon == 0 else 1.0
 	viewmodel.on_shot()
-	var recoil = Rules.rifle_recoil(rifle_shots) if weapon==0 else Vector2(0,Rules.WEAPONS[weapon]["kick"])
+	var recoil = Rules.rifle_recoil(rifle_shots)*float(weapon_stats().get("recoil",1.0)) if weapon==0 else Vector2(0,weapon_stats()["kick"])
 	if weapon==0:
 		rifle_shots = mini(23,rifle_shots+1)
 		rifle_idle = 0
@@ -307,12 +328,12 @@ func shoot() -> void:
 
 func start_reload() -> void:
 	if objective_busy(): return
-	if health<=0 or not held_grenade.is_empty() or weapon == 2 or reload_timer > 0.0 or ammo[weapon] == Rules.WEAPONS[weapon]["mag"]:
+	if health<=0 or not held_grenade.is_empty() or weapon == 2 or reload_timer > 0.0 or ammo[weapon] == weapon_stats()["mag"]:
 		return
 	network_action("reload")
 	if weapon==3:
 		sniper_cycle = 0
-	reload_timer = Rules.WEAPONS[weapon]["reload"]
+	reload_timer = weapon_stats()["reload"]
 	rifle_shots = 0
 	rifle_idle = 99.0
 	scope_age = 0.0
@@ -355,6 +376,7 @@ func take_damage(amount: int, source_team: int, attacker: String = "ENEMY") -> b
 		sniper_cycle = 0
 		scope_age = 0
 		held_grenade = ""
+		fire_buffer=0
 		fire_requested = false
 		jump_requested = false
 		blast_requested = false
@@ -377,11 +399,16 @@ func refill() -> void:
 	max_height = 0.0
 	blast_count = 1
 	smoke_count = 1
-	ammo = [24, 7, 0, 6]
+	ammo = [weapon_stats(0).mag, 7, 0, 6]
 	reload_timer = 0.0
 	health = 100
 
 func reset_at(pos: Vector3) -> void:
+	if not game.net.running:
+		set_class(Loadouts.allowed(game.prefs.data.selected_class,game.progression.xp_for("YOU")))
+	elif game.net.server and game.net.peers.has(peer_id):
+		var peer=game.net.peers[peer_id]
+		set_class(Loadouts.allowed(peer.get("selected_class","vanguard"),peer.progress.xp_for("YOU")))
 	rifle_shots = 0
 	rifle_idle = 99.0
 	parry_timer = 0.0
@@ -405,6 +432,7 @@ func reset_at(pos: Vector3) -> void:
 	last_boost_time = -999.0
 	fire_requested = false
 	jump_requested = false
+	fire_buffer=0
 	jump_buffer = 0.0
 	blast_requested = false
 	smoke_requested = false

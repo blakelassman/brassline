@@ -8,7 +8,7 @@ const Preferences = preload("res://scripts/preferences.gd")
 const LagCompensation = preload("res://scripts/lag_compensation.gd")
 var lag_comp = LagCompensation.new()
 var lag_rescued_hits = 0
-const PROTOCOL = 13
+const PROTOCOL = 14
 var replay_wait: Dictionary = {}
 var final_replay_until = 0.0
 var mode_id = "tdm"
@@ -163,17 +163,17 @@ func join(address: String, port: int, secret: String, selected_mode: String = "t
 	connect_started = Time.get_ticks_msec()
 	status = "Connecting to %s:%d…" % [address,port]
 func _connected() -> void:
-	_hello.rpc_id(1,PROTOCOL,password,game.prefs.data.name,int(game.prefs.data.xp),mode_id)
+	_hello.rpc_id(1,PROTOCOL,password,game.prefs.data.name,int(game.prefs.data.xp),mode_id,game.prefs.data.selected_class)
 @rpc("any_peer","call_remote","reliable",0)
-func _hello(protocol: int, secret: String, nickname: String, xp: int, requested_mode: String = "tdm") -> void:
+func _hello(protocol: int, secret: String, nickname: String, xp: int, requested_mode: String = "tdm", selected_class: String = "vanguard") -> void:
 	if not server: return
 	var id = multiplayer.get_remote_sender_id()
 	if not pending.has(id) or pending[id].authenticated: return
 	if not session_ready:
-		pending[id].hello = [protocol,secret,nickname,xp,requested_mode]
+		pending[id].hello = [protocol,secret,nickname,xp,requested_mode,selected_class]
 		return
-	_authenticate(id,protocol,secret,nickname,xp,requested_mode)
-func _authenticate(id: int, protocol: int, secret: String, nickname: String, xp: int, requested_mode: String = "tdm") -> void:
+	_authenticate(id,protocol,secret,nickname,xp,requested_mode,selected_class)
+func _authenticate(id: int, protocol: int, secret: String, nickname: String, xp: int, requested_mode: String = "tdm", selected_class: String = "vanguard") -> void:
 	if not pending.has(id) or pending[id].authenticated: return
 	if protocol!=PROTOCOL:
 		_reject.rpc_id(id,"Different game version. Update everyone through the launcher.")
@@ -203,7 +203,7 @@ func _authenticate(id: int, protocol: int, secret: String, nickname: String, xp:
 	if chosen<0:
 		_reject.rpc_id(id,"Server full: ten human players are already connected.")
 		return
-	pending[id].merge({"authenticated":true,"slot":chosen,"name":Preferences.clean_name(nickname),"xp":clampi(xp,0,Progression.threshold(1000))},true)
+	pending[id].merge({"selected_class":selected_class,"authenticated":true,"slot":chosen,"name":Preferences.clean_name(nickname),"xp":clampi(xp,0,Progression.threshold(1000))},true)
 	_welcome.rpc_id(id,game.current_map,chosen,game.clock,round_number)
 @rpc("authority","call_remote","reliable",0)
 func _reject(message: String) -> void: fail(message)
@@ -270,7 +270,7 @@ func _attach_human(id: int, slot: int, nickname: String, xp: int) -> void:
 	var progress = game.progression if id==1 else Progression.new()
 	progress.reset_roster(false)
 	progress.profiles["YOU"] = xp
-	peers[id] = {"killcams":game.prefs.data.killcams if id==1 else true,"slot":slot,"progress":progress,"commands":[],"last_action":0,"received_action":0,"last_input":Time.get_ticks_msec(),"last_sequence":0,"budget":80.0,"loaded":true,"transport":pending[id].transport if pending.has(id) else null,"leaving":false,"frames":[],"move_credit":2.0,"frame_gap":0}
+	peers[id] = {"selected_class":preload("res://scripts/loadouts.gd").allowed(game.prefs.data.selected_class if id==1 else pending.get(id,{}).get("selected_class","vanguard"),xp),"killcams":game.prefs.data.killcams if id==1 else true,"slot":slot,"progress":progress,"commands":[],"last_action":0,"received_action":0,"last_input":Time.get_ticks_msec(),"last_sequence":0,"budget":80.0,"loaded":true,"transport":pending[id].transport if pending.has(id) else null,"leaving":false,"frames":[],"move_credit":2.0,"frame_gap":0}
 	actor.reset_at(game.combat.choose_spawn(actor.team,actor))
 	actor.rotation.y = atan2(actor.position.x,actor.position.z)
 func _add_bot(index: int) -> void:
@@ -458,7 +458,7 @@ func _physics_process(delta: float) -> void:
 		if pending[id].has("hello") and not pending[id].authenticated:
 			var hello = pending[id].hello
 			pending[id].erase("hello")
-			_authenticate(id,hello[0],hello[1],hello[2],hello[3],hello[4])
+			_authenticate(id,hello[0],hello[1],hello[2],hello[3],hello[4],hello[5] if hello.size()>5 else "vanguard")
 		if pending.has(id) and pending[id].has("loaded"):
 			var loaded = pending[id].loaded
 			pending[id].erase("loaded")
@@ -481,7 +481,7 @@ func _physics_process(delta: float) -> void:
 func _row(slot: Dictionary) -> Array:
 	var a = slot.actor
 	var human = slot.peer>0
-	return [slot.index,a.position,a.velocity,a.rotation.y,a.pitch if human else 0.0,a.health,a.weapon if human else 0,a.crouched if human else false,a.life_id,a.reload_timer if human else a.reload_time,a.parry_timer if human else 0.0,a.cosmetics if human else {}]
+	return [slot.index,a.position,a.velocity,a.rotation.y,a.pitch if human else 0.0,a.health,a.weapon if human else 0,a.crouched if human else false,a.life_id,a.reload_timer if human else a.reload_time,a.parry_timer if human else 0.0,a.cosmetics if human else {},a.class_id if human else "vanguard"]
 func board_rows(team: int) -> Array:
 	var result: Array = []
 	for s in slots:
@@ -510,7 +510,7 @@ func _send_snapshots() -> void:
 			continue
 		if not p.get("loaded",true) or not can_send(id): continue
 		var a = slots[p.slot].actor
-		var own = {"recovery":a.fire_cooldown if a.weapon==2 else 0.0,"radar":game.radar.contacts(actors(),a.team,game.clock),"server_hz":server_tick_rate,"ack":a.last_input_sequence,"action":p.last_action,"ammo":a.ammo,"blast":a.blast_count,"smoke":a.smoke_count,"held":a.held_grenade,"ground":a.is_on_floor(),"jump_buffer":a.jump_buffer,"last_jump":a.last_jump_time,"xp":p.progress.xp_for("YOU"),"awards":p.progress.awards,"level_until":p.progress.level_up_until,"level":p.progress.recent_level,"round":round_info(a.team)}
+		var own = {"class_id":a.class_id,"recovery":a.fire_cooldown if a.weapon==2 else 0.0,"radar":game.radar.contacts(actors(),a.team,game.clock),"server_hz":server_tick_rate,"ack":a.last_input_sequence,"action":p.last_action,"ammo":a.ammo,"blast":a.blast_count,"smoke":a.smoke_count,"held":a.held_grenade,"ground":a.is_on_floor(),"jump_buffer":a.jump_buffer,"last_jump":a.last_jump_time,"xp":p.progress.xp_for("YOU"),"awards":p.progress.awards,"level_until":p.progress.level_up_until,"level":p.progress.recent_level,"round":round_info(a.team)}
 		var payload = var_to_bytes([game.clock,states,board,own,game.combat.scores,projectiles,smokes]).compress(FileAccess.COMPRESSION_DEFLATE)
 		packet_serial += 1
 		largest_packet = maxi(largest_packet,payload.size())
@@ -556,6 +556,7 @@ func _snapshot(time: float, states: Array, board: Array, own: Dictionary, scores
 		proxies[index].viewmodel.root.rotation.y = PI if slots[index].peer>0 else 0.0
 		proxies[index].target_name = slots[index].name
 		proxies[index].receive(row,time)
+	game.player.set_class(own.get("class_id","vanguard"))
 	game.progression.profiles["YOU"] = own.xp
 	game.progression.awards = own.awards
 	game.progression.level_up_until = own.level_until
@@ -642,7 +643,7 @@ func _reconcile(row: Array, own: Dictionary) -> void:
 	var remaining_reload = maxf(0,row[9]-inputs.size()*FIXED_STEP)
 	for index in range(4):
 		var base_ammo = own.ammo[index]
-		if index==row[6] and row[9]>0 and remaining_reload==0: base_ammo = game.Rules.WEAPONS[index]["mag"]
+		if index==row[6] and row[9]>0 and remaining_reload==0: base_ammo = a.weapon_stats(index)["mag"]
 		a.ammo[index] = maxi(0,base_ammo-pending_fire[index])
 	if actions.is_empty():
 		if a.weapon==2: a.fire_cooldown = maxf(a.fire_cooldown,own.get("recovery",0.0)-ping_ms/2000.0)
@@ -1097,7 +1098,7 @@ func capture_life(slot: int) -> Dictionary:
 	if human:
 		inventory = {"ammo":a.ammo.duplicate(),"blast":a.blast_count,"smoke":a.smoke_count}
 	else: inventory.ammo[0] = a.rounds
-	return {"health":a.health,"position":a.position,"rotation":a.rotation,"life":a.life_id,"human":human,"inventory":inventory,"weapon":a.weapon if human else 0,"reload":a.reload_timer if human else a.reload_time,"cooldown":a.fire_cooldown if human else a.shot_timer}
+	return {"class_id":a.class_id if human else "vanguard","health":a.health,"position":a.position,"rotation":a.rotation,"life":a.life_id,"human":human,"inventory":inventory,"weapon":a.weapon if human else 0,"reload":a.reload_timer if human else a.reload_time,"cooldown":a.fire_cooldown if human else a.shot_timer}
 func restore_life(slot: int, data: Dictionary) -> void:
 	if data.is_empty(): return
 	var a = slots[slot].actor
@@ -1107,6 +1108,7 @@ func restore_life(slot: int, data: Dictionary) -> void:
 	if (slots[slot].peer>0)!=data.human: a.rotation.y += PI
 	a.life_id = maxi(a.life_id,data.life+1)
 	if slots[slot].peer>0:
+		a.set_class(data.get("class_id","vanguard"))
 		a.ammo = data.inventory.ammo.duplicate()
 		a.blast_count = data.inventory.blast
 		a.smoke_count = data.inventory.smoke
@@ -1163,6 +1165,8 @@ func _broadcast_final_replay() -> void:
 	var clip=game.replays.history.last_clip
 	if clip.is_empty(): return
 	clip["result_title"] = destroy.reason if is_destroy() else winner
+	clip["result_team"] = destroy.last_winner if is_destroy() else (0 if game.combat.scores[1]==game.combat.scores[2] else (1 if game.combat.scores[1]>game.combat.scores[2] else 2))
+	clip["result_match"] = not round_active
 	var packed=game.replays.History.encode(clip)
 	if packed.is_empty(): return
 	if not dedicated: game.replays.present_final(clip,clip.result_title)
@@ -1199,3 +1203,16 @@ func _replay_settings(enabled: bool) -> void:
 	if not server: return
 	var id=multiplayer.get_remote_sender_id()
 	if peers.has(id): peers[id].killcams=enabled
+
+func select_class(id: String) -> void:
+	if not running: return
+	if server: _queue_class(1,id)
+	else: _class_request.rpc_id(1,id)
+func _queue_class(peer_id: int, id: String) -> void:
+	if not server or not peers.has(peer_id): return
+	var peer=peers[peer_id]
+	if preload("res://scripts/loadouts.gd").allowed(id,peer.progress.xp_for("YOU"))==id:
+		peer.selected_class=id
+@rpc("any_peer","call_remote","reliable",0)
+func _class_request(id: String) -> void:
+	_queue_class(multiplayer.get_remote_sender_id(),id)

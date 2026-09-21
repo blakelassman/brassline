@@ -93,7 +93,7 @@ func unit_test() -> void:
 	check(replay.hit_played and replay.ghosts[recorded.victim].rig.root.rotation.x>0,"Lethal hit confirmation and recorded victim fall play at the finish")
 	replay.advance(.71)
 	check(not replay.active,"Final killcam finishes automatically after the finishing hit")
-	check(replay.fade_alpha()>.99,"Final playback returns through a fade instead of a hard camera cut")
+	check(replay.fade_alpha()==0,"Final playback never blacks out the screen")
 	check(not replay.play(recorded,true),"Duplicate final packet cannot replay the final kill again")
 	# Capture at death, before the bot's deferred instant respawn changes position/life.
 	replay.reset(); victim.health=100
@@ -161,7 +161,7 @@ func unit_test() -> void:
 	await get_tree().process_frame
 	check(replay.transitioning() and not replay.active,"Round end presents the result before cutting to the replay")
 	replay._process(replay.OUTRO_SECONDS-.15)
-	check(replay.transitioning() and replay.fade_alpha()>.4,"Round result fades to black before the camera change")
+	check(replay.transitioning() and replay.fade_alpha()==0,"Round result keeps the arena visible before the camera change")
 	replay._process(.16)
 	check(replay.active and replay.final and n.final_replay_until>game.clock,"Destroy round end transitions into its mandatory final")
 	check(n.destroy.next_round_at>=n.final_replay_until+n.destroy.INTERMISSION-.01,"Next objective round waits until after final replay and result interval")

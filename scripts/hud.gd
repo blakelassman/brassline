@@ -10,18 +10,14 @@ var font: Font
 var ink = Color("f4ecd7")
 var gold = Color("f1bd58")
 var dim = Color("acc0c5")
-var replay_fade: ColorRect
+var crosshair_gap = 5.0
+var display_health = 100.0
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	font = ThemeDB.fallback_font
 	_build_menu()
-	replay_fade=ColorRect.new()
-	replay_fade.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	replay_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(replay_fade)
-	replay_fade.color=Color(0,0,0,0)
 
 func _build_menu() -> void:
 	menu = preload("res://scripts/menu.gd").new()
@@ -81,7 +77,10 @@ func _label(parent: Node, text: String, size: int, color: Color) -> void:
 
 func _process(_delta: float) -> void:
 	if game.challenges.update(_delta,game.active and not game.menu_open): game.sound("achievement",-15)
-	replay_fade.color=Color(0,0,0,0 if game.menu_open else game.replays.fade_alpha())
+	var p=game.player
+	var target_gap=5.0+tan(deg_to_rad(p.current_spread()))*(size.y*.5)/tan(deg_to_rad(p.camera.fov*.5))
+	crosshair_gap=lerpf(crosshair_gap,target_gap,1-exp(-22*_delta))
+	display_health=lerpf(display_health,float(p.health),1-exp(-12*_delta))
 	queue_redraw()
 	vote_panel.visible = game.net.running and not game.net.round_active and not game.menu_open and not game.replays.active and not game.replays.transitioning() and game.clock>=game.net.final_replay_until
 	if vote_panel.visible:
@@ -109,10 +108,7 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO,size),Color(0.04,0.10,0.13,0.76))
 		return
 	if game.replays.transitioning():
-		draw_rect(Rect2(Vector2.ZERO,size),Color(0,0,0,.24))
-		centered(game.replays.outro_title,size.y*.4,34,gold)
-		centered("%d  :  %d" % [game.combat.scores[1],game.combat.scores[2]],size.y*.4+46,26,ink)
-		centered("FINAL KILL REPLAY",size.y*.4+80,14,dim)
+		_draw_result()
 		return
 	if game.replays.active:
 		_draw_killcam()
@@ -133,27 +129,30 @@ func _draw() -> void:
 	var center = size / 2.0
 	var aim_color = gold if p.weapon == 1 else ink
 	if not scoped and p.health>0:
-		var gap = 5.0+tan(deg_to_rad(p.current_spread()))*(h*.5)/tan(deg_to_rad(p.camera.fov*.5))
+		var gap = crosshair_gap
 		for dir in [Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN]:
 			draw_line(center+dir*gap,center+dir*(gap+6),Color(0.04,0.1,0.13,0.9),4)
 			draw_line(center+dir*gap,center+dir*(gap+6),aim_color,2)
 		draw_circle(center,1.3,aim_color)
 	if game.hit_flash > 0.0:
-		var hit_color = gold if game.last_head else Color.WHITE
+		var hit_color = Color(gold if game.last_head else Color.WHITE,clampf(game.hit_flash*8,0,1))
 		for dir in [Vector2(-1,-1),Vector2(1,-1),Vector2(-1,1),Vector2(1,1)]:
 			draw_line(center+dir*14,center+dir*21,hit_color,2)
 	text_at(str(p.health),Vector2(28,h-40),32,Color("ff9275") if p.health<40 else ink)
 	draw_rect(Rect2(28,h-28,120,3),Color(.15,.2,.23,.8))
+	draw_rect(Rect2(28,h-28,1.2*display_health,3),Color("f19b62"))
 	draw_rect(Rect2(28,h-28,1.2*p.health,3),ink)
 	for i in range(2):
 		var at = Vector2(180+i*48,h-44)
 		draw_circle(at,6,gold if i==0 else dim)
 		text_at(str(p.blast_count if i==0 else p.smoke_count),at+Vector2(12,5),15,ink)
-	text_at(p.held_grenade.to_upper() if not p.held_grenade.is_empty() else Rules.WEAPONS[p.weapon].name,Vector2(w-225,h-70),13,gold)
-	var ammo_text = "%02d / %02d" % [p.ammo[p.weapon],Rules.WEAPONS[p.weapon].mag] if p.weapon!=2 else ""
-	text_at(ammo_text,Vector2(w-225,h-36),30,ink)
+	text_at(p.held_grenade.to_upper() if not p.held_grenade.is_empty() else p.weapon_stats().name,Vector2(w-225,h-70),13,gold)
+	var ammo_text = "%02d / %02d" % [p.ammo[p.weapon],p.weapon_stats().mag] if p.weapon!=2 else ""
+	var low_ammo=p.weapon!=2 and p.ammo[p.weapon]<=maxi(1,int(p.weapon_stats().mag*.25))
+	text_at(ammo_text,Vector2(w-225,h-36),30,gold if low_ammo else ink)
+	if low_ammo and p.reload_timer<=0 and p.held_grenade.is_empty(): text_at(binding_name("reload")+"  RELOAD",Vector2(w-225,h-9),12,dim)
 	if p.reload_timer>0:
-		draw_rect(Rect2(w-225,h-24,180*(1-p.reload_timer/float(Rules.WEAPONS[p.weapon].reload)),3),gold)
+		draw_rect(Rect2(w-225,h-24,180*(1-p.reload_timer/float(p.weapon_stats().reload)),3),gold)
 	if p.weapon==2 and p.parry_timer>0:
 		draw_arc(center,29,-PI*.8,-PI*.2,20,gold,3,true)
 	if help_visible:
@@ -232,6 +231,11 @@ func _draw_xp() -> void:
 		award_text(" / ".join(tags),y+25,12,Color(ink,fade))
 	if game.clock<p.level_up_until:
 		award_text("LEVEL UP / %d" % p.recent_level,190,22,gold)
+		var unlocks=preload("res://scripts/loadouts.gd")
+		var detail=unlocks.rank_title(p.recent_level)
+		for id in unlocks.IDS:
+			if unlocks.CLASSES[id].level==p.recent_level: detail=unlocks.CLASSES[id].title+" CLASS UNLOCKED"
+		award_text(detail,214,13,ink)
 
 func _draw_scoreboard() -> void:
 	var x = (size.x-840)/2
@@ -384,3 +388,19 @@ func _draw_killcam() -> void:
 		for dir in [Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN]: draw_line(at+dir*5,at+dir*11,ink,1.5)
 	if replay.hit_played:
 		for dir in [Vector2(-1,-1),Vector2(1,-1),Vector2(-1,1),Vector2(1,1)]: draw_line(size*.5+dir*14,size*.5+dir*22,gold if replay.clip.head else ink,2)
+
+func _draw_result() -> void:
+	var replay=game.replays
+	var age=replay.OUTRO_SECONDS-replay.outro_left
+	var enter=1-pow(1-clampf(age/.24,0,1),3)
+	var alpha=minf(clampf(age/.14,0,1),clampf(replay.outro_left/.16,0,1))
+	var tint=Color("6cddd1") if replay.outro_outcome>0 else (Color("ed977f") if replay.outro_outcome<0 else gold)
+	var y=size.y*.33+18*(1-enter)
+	var half=minf(290,size.x*.34)*enter
+	draw_rect(Rect2(size.x*.5-half,y-27,half*2,137),Color(.05,.10,.13,.72*alpha))
+	draw_line(Vector2(size.x*.5-half,y-27),Vector2(size.x*.5+half,y-27),Color(tint,alpha),2)
+	centered(replay.outro_title,y+12,32,Color(tint,alpha))
+	var team=game.player.team
+	centered("%d  :  %d" % [game.combat.scores[team],game.combat.scores[3-team]],y+49,26,Color(ink,alpha))
+	centered(replay.outro_detail,y+73,12,Color(dim,alpha))
+	centered("FINAL KILL",y+96,10,Color(dim,alpha*.8))

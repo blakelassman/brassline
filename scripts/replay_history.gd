@@ -33,7 +33,7 @@ func sample(game: Node, delta: float = 0, force: bool = false) -> void:
 		var id = actor_id(actor)
 		var human = actor is Player
 		var nickname = game.net.slots[actor.net_slot].name if game.net.running else actor.target_name
-		roster[id] = [nickname,actor.team,actor.cosmetics.duplicate() if human else {}]
+		roster[id] = [nickname,actor.team,actor.cosmetics.duplicate() if human else {},actor.class_id if human else "vanguard"]
 		var yaw = actor.rotation.y if human else actor.rotation.y+PI
 		var pitch = actor.pitch if human else float(actor.get_meta("replay_pitch",0.0))
 		rows.append([id,actor.position,yaw,pitch,actor.health,actor.weapon if human else 0,actor.is_aiming() if human else false,actor.crouched if human else false,actor.life_id,actor.velocity.length(),actor.reload_timer if human else actor.reload_time,(1.0 if actor.crouched else 1.64) if human else 1.38,actor.camera.fov if human else 86.0])

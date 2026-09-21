@@ -33,7 +33,7 @@ func _ready() -> void:
 	var top = HBoxContainer.new()
 	shell.add_child(top)
 	label(top,"BRASSLINE",46,ink).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label(top,"MULTIPLAYER  /  0.12.0",15,gold)
+	label(top,"MULTIPLAYER  /  0.13.0",15,gold)
 	var columns = HBoxContainer.new()
 	columns.add_theme_constant_override("separation",32)
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -48,7 +48,7 @@ func _ready() -> void:
 	var spacer = Control.new()
 	spacer.custom_minimum_size.y = 20
 	nav.add_child(spacer)
-	for page in ["PLAY","ONLINE","LOCKER","CHALLENGES","SETTINGS","CONTROLS"]:
+	for page in ["PLAY","ONLINE","LOADOUTS","LOCKER","CHALLENGES","SETTINGS","CONTROLS"]:
 		nav_buttons[page] = button(nav,page,func(): show_page(page))
 	resume_button = button(nav,"RESUME",func(): game.set_active(true))
 	resume_button.hide()
@@ -62,11 +62,14 @@ func _ready() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_stylebox_override("panel",style(Color("142b34"),24))
 	columns.add_child(content)
-	for name in ["PLAY","ONLINE","LOCKER","CHALLENGES","SETTINGS","CONTROLS"]:
+	for name in ["PLAY","ONLINE","LOADOUTS","LOCKER","CHALLENGES","SETTINGS","CONTROLS"]:
 		var page = VBoxContainer.new()
 		page.add_theme_constant_override("separation",14)
 		content.add_child(page)
 		pages[name] = page
+	var armory=preload("res://scripts/loadout_menu.gd").new()
+	add_child(armory)
+	armory.build(self)
 	_build_play(pages.PLAY)
 	_build_online(pages.ONLINE)
 	_build_settings(pages.SETTINGS)
@@ -208,6 +211,7 @@ func _build_settings(page: VBoxContainer) -> void:
 			else: game.net._replay_settings.rpc_id(1,enabled)
 		_settings_changed())
 	label(rows,"Final killcams always play. Skip death replays with your jump key.",14,muted)
+	_slider(rows,"Weapon motion (bob / lean / landing)","weapon_motion",0,1,.05)
 	label(rows,"AUDIO",13,muted)
 	_slider(rows,"Master volume","volume",0,1,.01)
 	_slider(rows,"Gunfire & explosions","weapons_volume",0,1,.01)

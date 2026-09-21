@@ -1,4 +1,4 @@
-# BRASSLINE 0.12.0
+# BRASSLINE 0.13.0
 
 A free Windows Godot FPS prototype with movement-focused combat, offline practice,
 and self-hosted internet multiplayer.
@@ -24,12 +24,31 @@ No Git, Python, editor installation or account is needed for players.
 Source checkouts and existing portable packages can still run
 `START_BRASSLINE.bat`. See `START_HERE.txt` for controls and `HOSTING.txt` for hosting.
 
-## New: Smoother rounds and longer matches
+## New: Classes, armory and game-feel update
 
-Destroy and Diffuse is now **first to six**, with sides switching after round
-five. Round endings show the result briefly, then fade into the final replay.
-Normal killcams consistently last 3.65 seconds; finals last 6.75 seconds and
-fade back to the result screen. Skipping normal killcams still works.
+Open **LOADOUTS** for four classes and permanent level unlocks:
+
+| Class | Unlock | Primary |
+| --- | --- | --- |
+| Vanguard | Level 1 | Rifle: precise assault, lethal headshots |
+| Raider | Level 3 | Kestrel SMG: rapid fire, 32 rounds |
+| Sentinel | Level 6 | Bastion LMG: sustained fire, 48 rounds |
+| Marksman | Level 10 | Lancer DMR: semi-auto, 12 rounds |
+
+Each keeps the pistol, sword, sniper and grenades. Selections apply next life or
+next round. Training can try locked classes without unlocking them for online.
+The armory shows weapon tradeoffs, XP to the next unlock, rank titles and level
+progress. Existing XP, challenges, cosmetics and level cap 1000 remain saved.
+
+Local weapon animation now updates every rendered frame, with smoother ADS,
+movement poses and stable recoil springs. A short fire buffer catches taps just
+before weapon recovery finishes. Settings includes a weapon-motion slider;
+the HUD adds fading hit confirmations, health trails and low-ammo reminders.
+
+Round and game wins/losses use animated banners over the arena. **No black
+fade.** Killcam timing and first-to-six Destroy matches remain unchanged.
+Host and all clients must update to **protocol 14**.
+[Weapon stats, unlocks and test details](docs/ARMORY_AND_POLISH.md).
 
 ## Killcams
 
@@ -42,7 +61,7 @@ Every online TDM match and Destroy round with a recorded kill ends with a
 **non-skippable final killcam**, slowing the finishing moment to quarter speed.
 Scoped views, weapon finishes, actual shot traces, headshot feedback and
 collateral victims are replayed before the next round or map vote.
-Everyone must update to protocol **13**; existing saves stay intact.
+Everyone must update to protocol **14**; existing saves stay intact.
 [Replay behavior and verification](docs/KILLCAMS.md).
 
 ## Destroy and Diffuse
@@ -83,7 +102,7 @@ The launcher downloads this update normally; saves and network protocol stay int
   Rarity odds: Field 70%, Signal 22%, Elite 6%, Mythic 1.75%, Special **0.25%
   (1 in 400 per opening)**. No purchases, keys, trading or cash value.
 
-The 0.9.0 release introduced network protocol **10** (superseded by 13). Existing XP, display and
+The 0.9.0 release introduced network protocol **10** (superseded by 14). Existing XP, display and
 keybind settings carry over. Challenges and inventory persist on the same Windows
 user profile. See `docs/UPDATE_0_9.md` for behavior and verification details.
 

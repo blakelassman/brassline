@@ -101,7 +101,7 @@ func event(kind: String, data: Dictionary = {}) -> void:
 	group_count = group_count+1 if group==last_group and group>=0 else 1
 	last_group = group
 	add("kills")
-	var weapon_stat = {"RIFLE":"rifle","HEAVY PISTOL":"pistol","LONGSHOT":"sniper","SWORD":"sword","BLAST":"blast"}.get(weapon,"")
+	var weapon_stat = {"RIFLE":"rifle","KESTREL SMG":"rifle","BASTION LMG":"rifle","LANCER DMR":"rifle","HEAVY PISTOL":"pistol","LONGSHOT":"sniper","SWORD":"sword","BLAST":"blast"}.get(weapon,"")
 	if not weapon_stat.is_empty(): add(weapon_stat)
 	stats.best_streak = maxi(int(stats.get("best_streak",0)),streak)
 	stats.best_chain = maxi(int(stats.get("best_chain",0)),chain)

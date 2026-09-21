@@ -61,6 +61,13 @@ jobs:
           $testOutput = Get-Content -LiteralPath $killcamLog -Raw
           Write-Output $testOutput
           if ($process.ExitCode -ne 0 -or $testOutput -match '(SCRIPT ERROR|FAIL )' -or $testOutput -notmatch 'KILLCAM_RESULT (\d+)/\1\b') { throw 'Killcam test failed.' }
+          Copy-Item ./tests/test_armory.gd "$runtime/tests/test_armory.gd"
+          $armoryLog = "$env:RUNNER_TEMP/brassline-armory-test.log"
+          $process = Start-Process -FilePath $engine -ArgumentList @('--headless', '--path', ('"' + $runtime + '"'), '--log-file', ('"' + $armoryLog + '"'), '--', '--armory-test') -PassThru
+          if (!$process.WaitForExit(90000)) { $process.Kill(); throw 'Armory test timed out.' }
+          $testOutput = Get-Content -LiteralPath $armoryLog -Raw
+          Write-Output $testOutput
+          if ($process.ExitCode -ne 0 -or $testOutput -match '(SCRIPT ERROR|FAIL )' -or $testOutput -notmatch 'ARMORY_RESULT (\d+)/\1\b') { throw 'Armory test failed.' }
           New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/brassline-ui" -Force | Out-Null
           Copy-Item ./dist/channel.json "$env:RUNNER_TEMP/brassline-ui/test-channel.json"
           ./launcher/Launcher.ps1 -Root "$env:RUNNER_TEMP/brassline-ui" -SmokeTest
