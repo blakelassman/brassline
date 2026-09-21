@@ -81,6 +81,12 @@ func run(game: Node) -> void:
 	check(bot.weapon_node.get_parent()==bot.rig.root,"Bot weapon follows the same interpolated pose as its hands")
 	bot.reset()
 	check(bot.presentation.previous==bot.presentation.current,"Bot respawn clears old interpolation history")
+	var remote=game.Player.new(); remote.game=game; remote.locally_controlled=false
+	game.add_child(remote); remote.set_physics_process(false)
+	remote.viewmodel.root.show(); remote.viewmodel.title.show(); remote.health=0
+	remote._process(.016)
+	check(not remote.viewmodel.root.visible and not remote.viewmodel.title.visible,"Dead host-side humans leave neither a model nor a floating teammate tag")
+	remote.queue_free()
 	game.prefs.data.quality=1; game.apply_settings()
 	check(game.get_viewport().msaa_3d==Viewport.MSAA_2X and game.get_viewport().screen_space_aa==Viewport.SCREEN_SPACE_AA_DISABLED,"Balanced quality uses anti-aliasing supported by Compatibility")
 	var prefs=game.Preferences.new("user://feel_settings_test.json")

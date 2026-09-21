@@ -84,7 +84,11 @@ var spread_rng = RandomNumberGenerator.new()
 var last_shot_direction = Vector3.FORWARD
 var correction_offset = Vector3.ZERO
 func _process(delta: float) -> void:
-	if camera==null or health<=0: return
+	if camera==null: return
+	if health<=0:
+		if not locally_controlled:
+			viewmodel.root.hide(); viewmodel.title.hide()
+		return
 	if not locally_controlled:
 		if game.active and not game.net.dedicated: viewmodel.update_pose(delta)
 		return
