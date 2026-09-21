@@ -131,6 +131,8 @@ func _ready() -> void:
 		call_deferred("_lagcomp_test")
 	elif "--prediction-test" in args:
 		call_deferred("_prediction_test")
+	elif "--armory-test" in args:
+		call_deferred("_armory_test")
 	elif "--killcam-test" in args:
 		call_deferred("_killcam_test")
 	elif "--destroy-test" in args:
@@ -157,7 +159,7 @@ func _ready() -> void:
 		call_deferred("_self_test")
 	elif Array(args).any(func(arg): return arg.begins_with("--capture")):
 		call_deferred("_capture")
-	print("BRASSLINE ready | multiplayer prototype 0.12.0 | Godot ", Engine.get_version_info()["string"])
+	print("BRASSLINE ready | multiplayer prototype 0.13.0 | Godot ", Engine.get_version_info()["string"])
 
 func _training_targets() -> void:
 	var names = ["WALL PEEK","STRAFE","HIGH GROUND","CLOSE RANGE","TEAMMATE","COLLATERAL A","COLLATERAL B"]
@@ -535,7 +537,7 @@ func shoot_ray(origin: Vector3, direction: Vector3, weapon_id: int, airborne: bo
 			excluded.append(area.get_rid())
 		if target.health > 0:
 			var head = collider.get_meta("zone") == "head"
-			var damage = Rules.WEAPONS[weapon_id]["head" if head else "body"]
+			var damage = shooter.weapon_stats(weapon_id)["head" if head else "body"]
 			var full_health = target.health==100
 			var killed = damage_actor(target,damage,shooter.team,shooter.target_name)
 			hit_count += 1
@@ -543,7 +545,7 @@ func shoot_ray(origin: Vector3, direction: Vector3, weapon_id: int, airborne: bo
 			any_head = any_head or head
 			if killed:
 				shot_kills += 1
-				record_kill(target.target_name,Rules.WEAPONS[weapon_id]["name"],head,airborne,action_serial,shooter.target_name,shooter.team,full_health and damage>=100,{"view_lag":clampf(clock-shooter.shot_view_time,0,.5) if rewind else 0.0,"scope":shooter.scope_age,"distance":origin.distance_to(hit.position),"health":shooter.health,"boosted":clock-shooter.last_boost_time<5})
+				record_kill(target.target_name,shooter.weapon_stats(weapon_id)["name"],head,airborne,action_serial,shooter.target_name,shooter.team,full_health and damage>=100,{"view_lag":clampf(clock-shooter.shot_view_time,0,.5) if rewind else 0.0,"scope":shooter.scope_age,"distance":origin.distance_to(hit.position),"health":shooter.health,"boosted":clock-shooter.last_boost_time<5})
 				if head and airborne:
 					air_heads += 1
 			hit["headshot"] = head
@@ -642,13 +644,13 @@ func _combat_test() -> void:
 	await suite.run(self)
 
 func _capture() -> void:
-	if not Array(OS.get_cmdline_user_args()).any(func(arg): return arg in ["--capture-menu","--capture-online","--capture-settings","--capture-controls","--capture-locker","--capture-challenges","--capture-case","--capture-finish"]):
+	if not Array(OS.get_cmdline_user_args()).any(func(arg): return arg in ["--capture-loadouts","--capture-menu","--capture-online","--capture-settings","--capture-controls","--capture-locker","--capture-challenges","--capture-case","--capture-finish"]):
 		set_active(true)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	player.set_physics_process(false)
 	var modes = OS.get_cmdline_user_args()
-	for page in ["ONLINE","SETTINGS","CONTROLS","LOCKER","CHALLENGES"]:
+	for page in ["LOADOUTS","ONLINE","SETTINGS","CONTROLS","LOCKER","CHALLENGES"]:
 		if "--capture-"+page.to_lower() in modes: hud.menu.show_page(page)
 	if "--capture-locker" in modes:
 		for id in ["armor_royal","rifle_circuit","sniper_aurora","sword_gilded","pistol_orchid"]: cosmetics.owned[id] = 1
@@ -701,7 +703,10 @@ func _capture() -> void:
 		await get_tree().process_frame
 		replays.set_process(false)
 		if "--capture-round-outro" in modes:
-			replays.present_final(replays.history.last_clip,"ROUND WON")
+			replays.history.last_clip["result_team"]=player.team
+			combat.scores=[0,3,2]
+			replays.present_final(replays.history.last_clip,"ENEMY TEAM ELIMINATED")
+			replays._process(.25)
 		else:
 			replays.play(replays.history.last_clip,true)
 			replays.elapsed=1.0
@@ -983,5 +988,10 @@ func _destroy_test() -> void:
 
 func _killcam_test() -> void:
 	var suite=load("res://tests/test_killcam.gd").new()
+	add_child(suite)
+	await suite.run(self)
+
+func _armory_test() -> void:
+	var suite=load("res://tests/test_armory.gd").new()
 	add_child(suite)
 	await suite.run(self)

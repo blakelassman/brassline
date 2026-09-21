@@ -50,6 +50,7 @@ func on_shot() -> void: flash_time = .065
 func weapon_model(index: int) -> Node3D:
 	if not is_instance_valid(guns[index]):
 		var model = preload("res://scripts/weapon_art.gd").world(root,index)
+		if index==0: preload("res://scripts/loadouts.gd").decorate(model,player.class_id)
 		model.position = Vector3(.26,1.13,.3)
 		model.rotation.y = PI
 		var collection = preload("res://scripts/cosmetics.gd")

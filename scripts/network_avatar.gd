@@ -5,6 +5,7 @@ var game: Node
 var team = 1
 var target_name = "Player"
 var health = 100
+var class_id = "vanguard"
 var weapon = 0
 var crouched = false
 var parry_timer = 0.0
@@ -31,6 +32,9 @@ func _ready() -> void:
 	viewmodel.player = self
 	add_child(viewmodel)
 func receive(row: Array, time: float) -> void:
+	if row.size()>12 and row[12]!=class_id:
+		class_id=row[12]
+		viewmodel.apply_cosmetics()
 	var incoming = row[11] if row.size()>11 else {}
 	if cosmetics!=incoming:
 		cosmetics = incoming.duplicate()

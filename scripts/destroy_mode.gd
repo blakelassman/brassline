@@ -18,6 +18,7 @@ var site = -1
 var deadline = 0.0
 var next_round_at = 0.0
 var reason = ""
+var last_winner = 0
 var holds: Dictionary = {}
 var worker = -1
 var work = 0.0
@@ -200,6 +201,7 @@ func tick(delta: float) -> void:
 			finish(3-attackers,"BOMB DEFUSED")
 func finish(team: int, message: String) -> void:
 	if not fighting(): return
+	last_winner = team
 	reason = message
 	alive = [0,0,0]
 	for row in net.slots:

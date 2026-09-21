@@ -18,5 +18,8 @@ static func draw_icon(canvas: CanvasItem, at: Vector2, weapon: String, color: Co
 		canvas.draw_colored_polygon(PackedVector2Array([at+Vector2(9,12),at+Vector2(18,12),at+Vector2(15,21),at+Vector2(7,21)]),color)
 		if weapon=="LONGSHOT":
 			canvas.draw_rect(Rect2(at+Vector2(18,2),Vector2(17,4)),color)
-		elif weapon=="RIFLE":
+		elif weapon in ["RIFLE","LANCER DMR","KESTREL SMG","BASTION LMG"]:
 			canvas.draw_rect(Rect2(at+Vector2(25,12),Vector2(6,8)),color)
+			if weapon=="BASTION LMG": canvas.draw_circle(at+Vector2(28,16),6,color)
+			if weapon=="LANCER DMR": canvas.draw_rect(Rect2(at+Vector2(18,3),Vector2(12,3)),color)
+			if weapon=="KESTREL SMG": canvas.draw_rect(Rect2(at+Vector2(15,4),Vector2(8,3)),color)

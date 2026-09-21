@@ -18,6 +18,7 @@ parser.add_argument('--latency', action='store_true')
 parser.add_argument('--capacity', action='store_true')
 parser.add_argument('--destroy', action='store_true')
 parser.add_argument('--killcams', action='store_true')
+parser.add_argument('--armory', action='store_true')
 parser.add_argument('--prediction', action='store_true')
 parser.add_argument('--lag-compensation', action='store_true')
 parser.add_argument('--delay-ms', type=float, default=40)
@@ -65,13 +66,13 @@ with tempfile.TemporaryDirectory(prefix='brassline-test-') as folder:
     if args.latency and not args.capacity:
         thread = threading.Thread(target=proxy)
         thread.start()
-    roles = ['host'] + ['client' + str(i) for i in range(9)] + ['full'] if args.capacity else (['host', 'client'] if args.prediction or args.lag_compensation or args.killcams else ['host', 'client', 'reject'])
+    roles = ['host'] + ['client' + str(i) for i in range(9)] + ['full'] if args.capacity else (['host', 'client'] if args.prediction or args.lag_compensation or args.killcams or args.armory else ['host', 'client', 'reject'])
     try:
         for role in roles:
             log_path = Path(folder) / (role + '.log')
             log = log_path.open('w')
             command = [args.godot, '--headless', '--path', args.project, '--',
-                       '--killcam-test' if args.killcams else ('--destroy-test' if args.destroy else ('--capacity-test' if args.capacity else ('--lagcomp-test' if args.lag_compensation else ('--prediction-test' if args.prediction else '--network-test')))),
+                       '--armory-test' if args.armory else '--killcam-test' if args.killcams else ('--destroy-test' if args.destroy else ('--capacity-test' if args.capacity else ('--lagcomp-test' if args.lag_compensation else ('--prediction-test' if args.prediction else '--network-test')))),
                        '--role=' + role, '--coord=' + folder, '--client-fps=' + str(args.client_fps),
                        '--join-port=' + ('27918' if args.latency else '27917')]
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)

@@ -2,6 +2,11 @@ extends Node
 ## A separate transparent 3D pass keeps the hands and weapons in front of cover.
 const Geo = preload("res://scripts/geo.gd")
 const Rules = preload("res://scripts/rules.gd")
+var aim_blend = 0.0
+var motion_blend = 0.0
+var visual_phase = 0.0
+var strafe_roll = 0.0
+var land_blend = 0.0
 var recoil_position = 0.0
 var recoil_velocity = 0.0
 var flash_time = 0.0
@@ -156,9 +161,23 @@ func _ready() -> void:
 func update_pose(delta: float) -> void:
 	var aiming = player.is_aiming()
 	root.visible = player.health>0 and not (player.weapon == 3 and player.scope_age >= Rules.SCOPE_READY and player.held_grenade.is_empty())
+	if delta<=0:
+		aim_blend=1.0 if aiming else 0.0
+		motion_blend=0; strafe_roll=0; land_blend=0
+		recoil_position=0; recoil_velocity=0
 	if delta>0:
-		recoil_velocity += (-155*recoil_position-23*recoil_velocity)*delta
-		recoil_position += recoil_velocity*delta
+		# Substep the spring so a slow frame cannot launch the weapon off-screen.
+		var left=minf(delta,.1)
+		while left>0:
+			var step=minf(left,1.0/240.0)
+			recoil_velocity+=(-155*recoil_position-23*recoil_velocity)*step
+			recoil_position+=recoil_velocity*step
+			left-=step
+		aim_blend=lerpf(aim_blend,1.0 if aiming else 0.0,1-exp(-18*delta))
+		motion_blend=lerpf(motion_blend,minf(Vector2(player.velocity.x,player.velocity.z).length()/6,1) if player.is_on_floor() else 0.0,1-exp(-12*delta))
+		visual_phase+=delta*Vector2(player.velocity.x,player.velocity.z).length()*1.7
+		strafe_roll=lerpf(strafe_roll,clampf(-player.velocity.dot(player.global_basis.x)*.005,-.035,.035),1-exp(-10*delta))
+		land_blend=lerpf(land_blend,player.landing_pose,1-exp(-22*delta))
 		flash_time = maxf(0,flash_time-delta)
 		for shell in casings:
 			shell.life -= delta
@@ -168,14 +187,14 @@ func update_pose(delta: float) -> void:
 			shell.node.rotate_z(delta*8)
 			if shell.life<=0: shell.node.queue_free()
 		casings = casings.filter(func(shell): return shell.life>0)
-	var moving = minf(Vector2(player.velocity.x,player.velocity.z).length()/6,1)
-	var bob = sin(player.movement_phase*2)*.009*moving if player.is_on_floor() else 0.0
+	var moving = motion_blend*float(player.game.prefs.data.weapon_motion)*(1-aim_blend*.65)
+	var bob = sin(visual_phase*2)*.009*moving
 	var draw = clampf(player.equip_cooldown/.22,0,1)
-	root.position = Vector3(.29 if aiming else .36,-.30+bob-player.landing_pose*.08,-.62+recoil_position*.10)
-	root.position += Vector3(sin(player.movement_phase)*.009*moving,0,0)
+	root.position = Vector3(lerpf(.36,.29,aim_blend),-.30+bob-land_blend*.08*float(player.game.prefs.data.weapon_motion),-.62+recoil_position*.10)
+	root.position += Vector3(sin(visual_phase)*.009*moving,0,0)
 	root.position += Vector3(-player.look_sway.x,-player.look_sway.y,0)
 	root.position.y -= draw*draw*.34
-	root.rotation = Vector3(recoil_position*.15+draw*.5+player.look_sway.y,-player.look_sway.x,cos(player.movement_phase)*.018*moving)
+	root.rotation = Vector3(recoil_position*.15+draw*.5+player.look_sway.y,-player.look_sway.x,cos(visual_phase)*.018*moving+strafe_roll*float(player.game.prefs.data.weapon_motion))
 	root.scale = Vector3.ONE*.83
 	for i in range(models.size()):
 		flashes[i].visible = flash_time>0 and i==player.weapon and i!=2
@@ -188,7 +207,7 @@ func update_pose(delta: float) -> void:
 	grenade_model.visible = not player.held_grenade.is_empty()
 	grenade_shell.material_override.albedo_color = Color("efb447") if player.held_grenade == "blast" else Color("80bfb9")
 	if player.reload_timer > 0:
-		var progress = 1.0-player.reload_timer/float(Rules.WEAPONS[player.weapon]["reload"])
+		var progress = 1.0-player.reload_timer/float(player.weapon_stats()["reload"])
 		var tilt = sin(PI*progress)
 		root.rotation += Vector3(-.25*tilt,.08*tilt,.72*tilt)
 		root.position += Vector3(-.15*tilt,.09*tilt,-.13*tilt)
@@ -247,4 +266,5 @@ func on_shot() -> void:
 func apply_cosmetics() -> void:
 	var collection = preload("res://scripts/cosmetics.gd")
 	var loadout = collection.clean_loadout(player.cosmetics)
+	preload("res://scripts/loadouts.gd").decorate(models[0],player.class_id)
 	for index in range(models.size()): collection.paint(models[index],loadout[["rifle","pistol","sword","sniper"][index]])

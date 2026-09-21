@@ -12,7 +12,6 @@ const REGULAR_PRE_ROLL = 3.0
 const FINAL_PRE_ROLL = 4.0
 const FINAL_AFTER_HIT = .8
 const OUTRO_SECONDS = 1.2
-const FADE_SECONDS = .3
 const FINAL_LOCK = 9.0
 const DEATH_TIMEOUT = 5.0
 var game: Node
@@ -27,7 +26,8 @@ var skip_ready = true
 var pending_final: Dictionary = {}
 var outro_left = 0.0
 var outro_title = ""
-var return_fade = 0.0
+var outro_detail = ""
+var outro_outcome = 0
 var active = false
 var final = false
 var clip: Dictionary = {}
@@ -124,16 +124,17 @@ func present_final(recorded: Dictionary, title: String) -> void:
 	stop(false)
 	pending_final=recorded.duplicate(true)
 	outro_left=OUTRO_SECONDS
-	outro_title=title
+	outro_detail=title
+	var winning_team=int(recorded.get("result_team",0))
+	outro_outcome=0 if winning_team==0 else (1 if winning_team==game.player.team else -1)
+	var scope="GAME" if recorded.get("result_match",false) else "ROUND"
+	outro_title=scope+(" DRAW" if outro_outcome==0 else (" WON" if outro_outcome>0 else " LOST"))
+	game.sound("ui",-20)
+	_build_world() # Warm static replay scenery during the result window, before the camera cut.
 func transitioning() -> bool:
 	return not pending_final.is_empty()
 func fade_alpha() -> float:
-	if transitioning(): return clampf(1.0-outro_left/FADE_SECONDS,0,1)
-	if active:
-		var entry=clampf(1.0-elapsed/FADE_SECONDS,0,1)
-		var ending=clampf((finish_hold-(FINAL_AFTER_HIT-FADE_SECONDS))/FADE_SECONDS,0,1) if final else 0.0
-		return maxf(entry,ending)
-	return clampf(return_fade/FADE_SECONDS,0,1)
+	return 0.0 # Never cover live play or replays with a black transition.
 func play(recorded: Dictionary, mandatory: bool) -> bool:
 	if recorded.is_empty() or recorded.map!=game.current_map: return false
 	if mandatory:
@@ -168,7 +169,7 @@ func play(recorded: Dictionary, mandatory: bool) -> bool:
 		var rig = Rig.build(root,Color("30bac6") if info[1]==1 else Color("ed6c46"),Collection.catalog()[loadout.armor].variant)
 		Collection.paint(rig.root,loadout.armor,true)
 		preload("res://scripts/optimizer.gd").rig(rig)
-		ghosts[id]={"root":root,"rig":rig,"gun":null,"weapon":-1,"loadout":loadout}
+		ghosts[id]={"root":root,"rig":rig,"gun":null,"weapon":-1,"loadout":loadout,"class_id":info[3] if info.size()>3 else "vanguard"}
 	container.show(); gun_container.show()
 	weapon_viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -200,7 +201,6 @@ func _copy_static(node: Node) -> void:
 		if copy is Node3D: copy.global_transform=node.global_transform
 	for child in node.get_children(): _copy_static(child)
 func _process(delta: float) -> void:
-	return_fade=maxf(0,return_fade-delta)
 	if transitioning():
 		outro_left=maxf(0,outro_left-delta)
 		if outro_left<=0:
@@ -275,7 +275,9 @@ func _render(delta: float) -> void:
 			ghost.rig.root.position.y = -minf(.45,age)
 		if ghost.weapon!=row[5]:
 			if is_instance_valid(ghost.gun): ghost.gun.free()
-			ghost.gun=Art.world(ghost.root,row[5]); ghost.gun.position=Vector3(.28,1.1,.3); ghost.gun.rotation.y=PI
+			ghost.gun=Art.world(ghost.root,row[5]);
+			if row[5]==0: preload("res://scripts/loadouts.gd").decorate(ghost.gun,ghost.class_id)
+			ghost.gun.position=Vector3(.28,1.1,.3); ghost.gun.rotation.y=PI
 			Collection.paint(ghost.gun,ghost.loadout[["rifle","pistol","sword","sniper"][row[5]]])
 			ghost.weapon=row[5]
 		if id==clip.killer:
@@ -286,6 +288,7 @@ func _render(delta: float) -> void:
 			if gun_id!=row[5]:
 				if is_instance_valid(gun): gun.free()
 				gun=Art.world(weapon_camera,row[5]); gun_id=row[5]
+				if gun_id==0: preload("res://scripts/loadouts.gd").decorate(gun,ghost.class_id)
 				Collection.paint(gun,ghost.loadout[["rifle","pistol","sword","sniper"][gun_id]])
 				Geo.sphere(gun,Vector3(0,-.19,.16),.075,Color("354c53"))
 				Geo.beam(gun,Vector3(0,-.22,.2),Vector3(.16,-.35,.65),.12,Color("58767b"))
@@ -342,7 +345,6 @@ func stop(resume: bool = false) -> void:
 	pending_final={}; outro_left=0
 	var was_active=active
 	var was_final=final
-	if was_active and was_final and resume: return_fade=FADE_SECONDS
 	active=false; final=false; scoped=false
 	if was_active:
 		game.get_viewport().disable_3d=saved_disable_3d
@@ -366,6 +368,6 @@ func stop(resume: bool = false) -> void:
 		if game.net.running: game.net.finish_death_replay()
 		elif game.mode=="combat": game.combat.respawn_player()
 func reset() -> void:
-	stop(false); return_fade=0; history.clear(); last_death_id=-1; last_final_id=-1; flush_queued=false
+	stop(false); history.clear(); last_death_id=-1; last_final_id=-1; flush_queued=false
 	if is_instance_valid(scenery): scenery.queue_free(); scenery=null
 	cached_world_id=0
