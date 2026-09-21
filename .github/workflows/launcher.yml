@@ -75,6 +75,13 @@ jobs:
           $testOutput = Get-Content -LiteralPath $presentationLog -Raw
           Write-Output $testOutput
           if ($process.ExitCode -ne 0 -or $testOutput -match '(SCRIPT ERROR|FAIL )' -or $testOutput -notmatch 'PRESENTATION_RESULT (\d+)/\1\b') { throw 'Presentation test failed.' }
+          Copy-Item ./tests/test_feel.gd "$runtime/tests/test_feel.gd"
+          $feelLog = "$env:RUNNER_TEMP/brassline-feel-test.log"
+          $process = Start-Process -FilePath $engine -ArgumentList @('--headless', '--path', ('"' + $runtime + '"'), '--log-file', ('"' + $feelLog + '"'), '--', '--feel-test') -PassThru
+          if (!$process.WaitForExit(90000)) { $process.Kill(); throw 'Feel test timed out.' }
+          $testOutput = Get-Content -LiteralPath $feelLog -Raw
+          Write-Output $testOutput
+          if ($process.ExitCode -ne 0 -or $testOutput -match '(SCRIPT ERROR|FAIL )' -or $testOutput -notmatch 'FEEL_RESULT (\d+)/\1\b') { throw 'Feel test failed.' }
           New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/brassline-ui" -Force | Out-Null
           Copy-Item ./dist/channel.json "$env:RUNNER_TEMP/brassline-ui/test-channel.json"
           ./launcher/Launcher.ps1 -Root "$env:RUNNER_TEMP/brassline-ui" -SmokeTest

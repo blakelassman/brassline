@@ -100,8 +100,17 @@ static func build(parent: Node3D, color: Color, variant: int) -> Dictionary:
 
 static func animate(rig: Dictionary, speed: float, clock: float, hit: float, reload: float, shot: float, armed: bool) -> void:
 	if rig.is_empty(): return
-	var stride = minf(speed/5,1)
-	var phase = clock*(9.5+stride*2)
+	if not rig.has("animation") or clock<float(rig.animation.clock):
+		rig.animation={"clock":clock,"phase":0.0,"stride":0.0,"reload":0.0}
+	var state=rig.animation
+	var delta=clampf(clock-float(state.clock),0,.1)
+	state.clock=clock
+	# Integrate distance; speed changes must not multiply the entire match age.
+	state.phase=fmod(float(state.phase)+maxf(0,speed)*2.3*delta,TAU)
+	state.stride=lerpf(float(state.stride),minf(speed/5,1),1-exp(-14*delta))
+	state.reload=lerpf(float(state.reload),1.0 if reload>0 else 0.0,1-exp(-16*delta))
+	var stride=float(state.stride)
+	var phase=float(state.phase)
 	for i in range(2):
 		var walk = sin(phase+i*PI)*stride
 		rig.legs[i].rotation.x = walk*.43
@@ -112,8 +121,7 @@ static func animate(rig: Dictionary, speed: float, clock: float, hit: float, rel
 	if armed:
 		rig.arms[0].rotation.z = -.28
 		rig.arms[1].rotation.x -= shot*.8
-		if reload>0:
-			rig.arms[0].rotation.x = -.45+sin(clock*8)*.2
-			rig.elbows[0].rotation.x = -1.6
-			rig.arms[1].rotation.z = -.2
+		rig.arms[0].rotation.x=lerpf(rig.arms[0].rotation.x,-.45+sin(clock*8)*.08,state.reload)
+		rig.elbows[0].rotation.x=lerpf(rig.elbows[0].rotation.x,-1.6,state.reload)
+		rig.arms[1].rotation.z=lerpf(rig.arms[1].rotation.z,-.2,state.reload)
 	rig.torso.rotation = Vector3(hit*.20,0,sin(phase)*stride*.018)

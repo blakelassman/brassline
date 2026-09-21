@@ -3,7 +3,7 @@ extends RefCounted
 const PATH = "user://profile_v1.json"
 const DEFAULT_KEYS = {"interact":[KEY_E],"drop_bomb":[KEY_X],"spectate_next":[KEY_V],"forward":[KEY_W],"back":[KEY_S],"left":[KEY_A],"right":[KEY_D],"jump":[KEY_SPACE,-MOUSE_BUTTON_WHEEL_DOWN],"crouch":[KEY_CTRL,KEY_C],"fire":[-MOUSE_BUTTON_LEFT],"aim":[-MOUSE_BUTTON_RIGHT],"weapon_0":[KEY_1],"weapon_1":[KEY_2],"weapon_2":[KEY_3],"weapon_3":[KEY_4],"reload":[KEY_R],"blast":[KEY_G],"smoke":[KEY_Q],"refill":[KEY_F],"reset":[KEY_T],"scoreboard":[KEY_TAB],"help":[KEY_H],"pause":[KEY_ESCAPE]}
 const LABELS = {"interact":"Plant / defuse bomb (hold)","drop_bomb":"Drop bomb","spectate_next":"Next teammate (spectating)","forward":"Move forward","back":"Move backward","left":"Strafe left","right":"Strafe right","jump":"Jump","crouch":"Crouch (hold)","fire":"Fire / slash / throw","aim":"Aim / scope / parry / short toss","weapon_0":"Rifle","weapon_1":"Heavy pistol","weapon_2":"Sword","weapon_3":"Sniper","reload":"Reload","blast":"Equip blast grenade","smoke":"Equip smoke grenade","refill":"Refill training supplies","reset":"Reset training drill","scoreboard":"Scoreboard (hold)","help":"Toggle tips","pause":"Open / close menu"}
-var data: Dictionary = {"version":1,"name":"Player","id":"","xp":0,"sensitivity":.0023,"volume":.65,"weapons_volume":1.0,"effects_volume":1.0,"feedback_volume":.85,"ambience_volume":.35,"quality":1,"fps_limit":120,"fullscreen":false,"resolution_width":1920,"resolution_height":1080,"challenges":{},"cosmetics":{},"bindings":{},"selected_class":"vanguard","weapon_motion":1.0,"killcams":true,"online_mode":"tdm","last_address":"","port":27020}
+var data: Dictionary = {"version":1,"name":"Player","id":"","xp":0,"sensitivity":.0023,"volume":.65,"weapons_volume":1.0,"effects_volume":1.0,"feedback_volume":.85,"ambience_volume":.35,"quality":1,"fps_limit":120,"fullscreen":false,"resolution_width":1920,"resolution_height":1080,"challenges":{},"cosmetics":{},"bindings":{},"selected_class":"vanguard","weapon_motion":1.0,"render_scale":1.0,"killcams":true,"online_mode":"tdm","last_address":"","port":27020}
 var path = PATH
 var error = ""
 var dirty = false
@@ -20,16 +20,17 @@ func load_profile() -> void:
 		for key in data:
 			if parsed.has(key) and typeof(parsed[key])==typeof(data[key]): data[key] = parsed[key]
 		# JSON stores all numbers as floats; explicitly validate and clamp numeric fields.
-		for key in ["xp","quality","fps_limit","port","sensitivity","volume","weapon_motion","weapons_volume","effects_volume","feedback_volume","ambience_volume","resolution_width","resolution_height"]:
+		for key in ["xp","quality","fps_limit","port","sensitivity","volume","weapon_motion","render_scale","weapons_volume","effects_volume","feedback_volume","ambience_volume","resolution_width","resolution_height"]:
 			if parsed.get(key) is float or parsed.get(key) is int:
 				if is_finite(float(parsed[key])): data[key] = parsed[key]
 		break
 	data.xp = clampi(int(data.xp),0,25199775)
+	data.render_scale=clampf(float(data.render_scale),.5,1.0)
 	data.quality = clampi(int(data.quality),0,2)
 	data.fps_limit = clampi(int(data.fps_limit),30,240)
 	data.port = clampi(int(data.port),1024,65535)
 	data.sensitivity = clampf(float(data.sensitivity),.0003,.012)
-	for field in ["volume","weapon_motion","weapons_volume","effects_volume","feedback_volume","ambience_volume"]:
+	for field in ["volume","weapon_motion","render_scale","weapons_volume","effects_volume","feedback_volume","ambience_volume"]:
 		data[field] = clampf(float(data[field]),0,1)
 	data.resolution_width = clampi(int(data.resolution_width),960,7680)
 	data.resolution_height = clampi(int(data.resolution_height),540,4320)

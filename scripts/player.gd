@@ -38,6 +38,9 @@ var view_previous = Vector3.ZERO
 var view_current = Vector3.ZERO
 var view_eye = 1.64
 var view_ready = false
+var fov_start=86.0
+var fov_goal=86.0
+var fov_elapsed=.12
 var viewmodel: Node
 var weapon = 0
 var ammo = [24, 7, 0, 6]
@@ -65,6 +68,8 @@ var jump_requested = false
 var blast_requested = false
 var smoke_requested = false
 var short_toss_requested = false
+var toss_buffer=0.0
+var buffered_short_toss=false
 var jump_buffer = 0.0
 var scope_age = 0.0
 var held_grenade = ""
@@ -79,15 +84,28 @@ var spread_rng = RandomNumberGenerator.new()
 var last_shot_direction = Vector3.FORWARD
 var correction_offset = Vector3.ZERO
 func _process(delta: float) -> void:
-	if not locally_controlled or camera==null or health<=0: return
+	if camera==null: return
+	if health<=0:
+		if not locally_controlled:
+			viewmodel.root.hide(); viewmodel.title.hide()
+		return
+	if not locally_controlled:
+		if game.active and not game.net.dedicated: viewmodel.update_pose(delta)
+		return
 	correction_offset *= exp(-20*delta)
 	if game.active and not game.menu_open and not game.replays.active and not game.replays.transitioning():
 		look_sway=look_sway.lerp(Vector2.ZERO,1-exp(-12*delta))
 		var target_fov=32.0 if is_aiming() and weapon==3 else (70.0 if is_aiming() else 86.0)
-		camera.fov=move_toward(camera.fov,target_fov,450.0*delta)
+		update_zoom(delta,target_fov)
 		viewmodel.update_pose(delta)
 	camera.position = Vector3(0,1.00 if crouched else 1.64,0)
 	update_presentation(delta,Engine.get_physics_interpolation_fraction())
+
+func update_zoom(delta: float, target: float) -> void:
+	if not is_equal_approx(target,fov_goal):
+		fov_start=camera.fov; fov_goal=target; fov_elapsed=0
+	fov_elapsed=minf(.12,fov_elapsed+delta)
+	camera.fov=lerpf(fov_start,fov_goal,smoothstep(0,.12,fov_elapsed))
 
 func presentation_camera() -> Camera3D:
 	return render_camera if is_instance_valid(render_camera) else camera
@@ -177,6 +195,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(delta: float) -> void:
 	if locally_controlled: view_previous=view_current
+	else: viewmodel.presentation.begin_tick(global_transform)
 	if locally_controlled and game.net.is_client_ready(): game.net.consume_reconciliation()
 	if not game.active or (game.net.running and not game.net.combat_allowed()):
 		return
@@ -199,6 +218,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		simulate_movement(delta,move_input,jump_requested,held("crouch"),false)
 	if locally_controlled: view_current=global_position
+	else: viewmodel.presentation.end_tick(global_transform)
 	jump_requested = false
 	var flat = Vector2(velocity.x,velocity.z)
 	if locally_controlled and game.net.is_client_ready(): game.net.remember_input(self,move_input,movement_jump)
@@ -220,11 +240,13 @@ func _physics_process(delta: float) -> void:
 	if fire_blocked_until_release and not held("fire"):
 		fire_blocked_until_release = false
 	fire_buffer=.10 if fire_requested else maxf(0,fire_buffer-delta)
+	toss_buffer=maxf(0,toss_buffer-delta)
 	if not held_grenade.is_empty():
-		if short_toss_requested:
-			throw_grenade(held_grenade,true)
-		elif fire_requested:
-			throw_grenade(held_grenade,false)
+		if short_toss_requested or fire_requested:
+			toss_buffer=.20; buffered_short_toss=short_toss_requested
+		if toss_buffer>0 and equip_cooldown<=0:
+			throw_grenade(held_grenade,buffered_short_toss)
+			toss_buffer=0
 	elif not fire_blocked_until_release and (fire_buffer>0 or (weapon == 0 and weapon_stats().get("auto",true) and held("fire"))):
 		if fire_cooldown<=0 and equip_cooldown<=0 and reload_timer<=0:
 			fire_buffer=0
@@ -241,7 +263,6 @@ func _physics_process(delta: float) -> void:
 		target_fov = 32.0 if weapon == 3 else 70.0
 	if not locally_controlled:
 		camera.fov = move_toward(camera.fov,target_fov,450.0*delta)
-		viewmodel.update_pose(delta)
 
 func advance_weapon_state(delta: float) -> void:
 	rifle_idle += delta
@@ -287,6 +308,7 @@ func equip(index: int) -> void:
 	network_action("equip",index)
 	held_grenade = ""
 	parry_timer = 0.0
+	toss_buffer=0
 	fire_buffer=0
 	weapon = index
 	rifle_shots = 0
@@ -307,6 +329,7 @@ func equip_grenade(kind: String) -> void:
 		return
 	network_action("grenade",1 if kind=="smoke" else 0)
 	parry_timer = 0.0
+	toss_buffer=0
 	fire_buffer=0
 	held_grenade = kind
 	rifle_shots = 0
@@ -460,6 +483,7 @@ func reset_at(pos: Vector3) -> void:
 	pitch = 0.0
 	camera.rotation = Vector3.ZERO
 	camera.fov = 86.0
+	fov_start=86.0; fov_goal=86.0; fov_elapsed=.12
 	last_jump_time = -999.0
 	last_boost_time = -999.0
 	fire_requested = false
@@ -476,6 +500,7 @@ func reset_at(pos: Vector3) -> void:
 	fire_cooldown = 0.0
 	equip_cooldown = 0.0
 	throw_pose = 0.0
+	toss_buffer=0
 	visual_kick = 0.0
 	landing_pose = 0
 	look_sway = Vector2.ZERO

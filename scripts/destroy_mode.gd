@@ -4,7 +4,7 @@ const ROUND_SECONDS = 120.0
 const BOMB_SECONDS = 60.0
 const PLANT_SECONDS = 4.0
 const DEFUSE_SECONDS = 8.0
-const INTERMISSION = 6.0
+const INTERMISSION = 3.0
 const WINS = 6
 const SITES = [Vector3(-21,.05,-9),Vector3(21,.05,-9)]
 var net: Node
@@ -299,8 +299,8 @@ func view_tick(delta: float) -> void:
 		for x in [-.17,.17]: game.Geo.box(bomb_visual,Vector3(x,.25,0),Vector3(.06,.04,.34),Color("deb25d"))
 	bomb_visual.visible = info.phase=="planted" or (info.phase=="live" and info.attackers==game.player.team and info.carrier<0)
 	bomb_visual.position = info.planted if info.phase=="planted" else info.dropped
-	_update_spectator()
-func _update_spectator() -> void:
+	_update_spectator(delta)
+func _update_spectator(delta: float = 0.0) -> void:
 	var game = net.game
 	if game.player.health>0 or net.dedicated:
 		if is_instance_valid(spectator): spectator.queue_free(); spectator = null; game.player.presentation_camera().make_current()
@@ -311,6 +311,7 @@ func _update_spectator() -> void:
 		game.add_child(spectator)
 		spectator.fov = 86
 		spectator.make_current()
+		watching=-1
 	var friends: Array = []
 	var actors = net.actors() if net.server else net.proxies.values()
 	for actor in actors:
@@ -327,14 +328,21 @@ func _update_spectator() -> void:
 		if friends[i].net_slot==watching: index = i
 	if not game.menu_open and Input.is_action_just_pressed("spectate_next"): index = (index+1)%friends.size()
 	var actor = friends[index]
+	var changed=watching!=actor.net_slot
 	watching = actor.net_slot
 	var eye = actor.global_position+Vector3.UP*1.6
 	var forward = -actor.global_basis.z if net.slots[watching].peer>0 else actor.global_basis.z
 	var desired = eye-forward*2.2+Vector3.UP*.5
 	var query = PhysicsRayQueryParameters3D.create(eye,desired,1)
 	var hit = game.get_world_3d().direct_space_state.intersect_ray(query)
-	spectator.position = hit.position+hit.normal*.15 if not hit.is_empty() else desired
-	spectator.look_at(eye+forward*8)
+	var destination=hit.position+hit.normal*.15 if not hit.is_empty() else desired
+	var smooth_position=destination if changed or delta<=0 else spectator.position.lerp(destination,1-exp(-14*delta))
+	# Clamp the eased camera too: smoothing must never carry it through a wall.
+	query=PhysicsRayQueryParameters3D.create(eye,smooth_position,1)
+	hit=game.get_world_3d().direct_space_state.intersect_ray(query)
+	spectator.position=hit.position+hit.normal*.15 if not hit.is_empty() else smooth_position
+	var desired_basis=Basis.looking_at(eye+forward*8-spectator.position)
+	spectator.basis=desired_basis if changed or delta<=0 else spectator.basis.slerp(desired_basis,1-exp(-18*delta))
 	spectating_name = net.slots[watching].name
 func reset_view() -> void:
 	if is_instance_valid(spectator): spectator.queue_free(); spectator = null

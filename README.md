@@ -1,7 +1,24 @@
-# BRASSLINE 0.13.1
+# BRASSLINE 0.14.0
 
 A free Windows Godot FPS prototype with movement-focused combat, offline practice,
 and self-hosted internet multiplayer.
+
+## Gameplay feel update (0.14.0)
+
+Walking animation now integrates distance instead of jumping poses when speed
+changes. Bots and host-side human models interpolate between physics ticks;
+weapons, labels and effects move with them. Bots turn toward a target before
+firing and use capsule-checked path shortcuts to reduce grid-shaped turns.
+
+Weapon swaps now holster then draw, zoom eases to its exact FOV in 120 ms,
+and a grenade click during equip is buffered instead of silently lost. Reloads
+cover less of the screen. Spectating eases its camera while respecting walls;
+the post-replay Destroy intermission is three seconds.
+
+Balanced uses supported 2x MSAA, replacing the unsupported FXAA setting.
+Settings includes an independent 3D render scale; HUD text stays full resolution.
+Cosmetic death effects retain their shader and fade without a material-cast error.
+[Implementation, tests and limitations](docs/GAMEPLAY_FEEL.md).
 
 ## Presentation and movement update
 
@@ -13,7 +30,7 @@ final scores before the replay. No full-screen fade.
 
 Replay scenery is prepared during loading and reused between rounds. The HUD,
 armor and weapon finishes use more restrained materials and colors; medium
-quality adds FXAA and a short-range shadow pass. Low quality keeps shadows off.
+quality adds 2x MSAA and a short-range shadow pass. Low quality keeps shadows off.
 See [implementation and verification](docs/PRESENTATION.md).
 
 ## Install once, update from the launcher
