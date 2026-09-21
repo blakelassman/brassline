@@ -1,7 +1,20 @@
-# BRASSLINE 0.13.0
+# BRASSLINE 0.13.1
 
 A free Windows Godot FPS prototype with movement-focused combat, offline practice,
 and self-hosted internet multiplayer.
+
+## Presentation and movement update
+
+The local world camera now interpolates between physics ticks; mouse aim stays
+immediate and hit detection remains authoritative. Crouching eases the viewpoint,
+and respawns reset it without a camera sweep. Round results now include no-kill
+bomb/timeout endings, with a short settling beat, viewer-relative win/loss and
+final scores before the replay. No full-screen fade.
+
+Replay scenery is prepared during loading and reused between rounds. The HUD,
+armor and weapon finishes use more restrained materials and colors; medium
+quality adds FXAA and a short-range shadow pass. Low quality keeps shadows off.
+See [implementation and verification](docs/PRESENTATION.md).
 
 ## Install once, update from the launcher
 
@@ -47,7 +60,7 @@ the HUD adds fading hit confirmations, health trails and low-ammo reminders.
 
 Round and game wins/losses use animated banners over the arena. **No black
 fade.** Killcam timing and first-to-six Destroy matches remain unchanged.
-Host and all clients must update to **protocol 14**.
+Host and all clients must update to **protocol 15**.
 [Weapon stats, unlocks and test details](docs/ARMORY_AND_POLISH.md).
 
 ## Killcams
@@ -61,7 +74,7 @@ Every online TDM match and Destroy round with a recorded kill ends with a
 **non-skippable final killcam**, slowing the finishing moment to quarter speed.
 Scoped views, weapon finishes, actual shot traces, headshot feedback and
 collateral victims are replayed before the next round or map vote.
-Everyone must update to protocol **14**; existing saves stay intact.
+Everyone must update to protocol **15**; existing saves stay intact.
 [Replay behavior and verification](docs/KILLCAMS.md).
 
 ## Destroy and Diffuse
@@ -102,7 +115,7 @@ The launcher downloads this update normally; saves and network protocol stay int
   Rarity odds: Field 70%, Signal 22%, Elite 6%, Mythic 1.75%, Special **0.25%
   (1 in 400 per opening)**. No purchases, keys, trading or cash value.
 
-The 0.9.0 release introduced network protocol **10** (superseded by 14). Existing XP, display and
+The 0.9.0 release introduced network protocol **10** (superseded by 15). Existing XP, display and
 keybind settings carry over. Challenges and inventory persist on the same Windows
 user profile. See `docs/UPDATE_0_9.md` for behavior and verification details.
 

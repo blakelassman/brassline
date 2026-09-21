@@ -33,7 +33,7 @@ func _ready() -> void:
 	var top = HBoxContainer.new()
 	shell.add_child(top)
 	label(top,"BRASSLINE",46,ink).size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label(top,"MULTIPLAYER  /  0.13.0",15,gold)
+	label(top,"MULTIPLAYER  /  0.13.1",15,gold)
 	var columns = HBoxContainer.new()
 	columns.add_theme_constant_override("separation",32)
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL

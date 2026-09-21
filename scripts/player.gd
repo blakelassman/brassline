@@ -33,6 +33,11 @@ var hitboxes: Array[Area3D] = []
 var movement_jump = false
 var game: Node
 var camera: Camera3D
+var render_camera: Camera3D
+var view_previous = Vector3.ZERO
+var view_current = Vector3.ZERO
+var view_eye = 1.64
+var view_ready = false
 var viewmodel: Node
 var weapon = 0
 var ammo = [24, 7, 0, 6]
@@ -81,8 +86,26 @@ func _process(delta: float) -> void:
 		var target_fov=32.0 if is_aiming() and weapon==3 else (70.0 if is_aiming() else 86.0)
 		camera.fov=move_toward(camera.fov,target_fov,450.0*delta)
 		viewmodel.update_pose(delta)
-	# Presentation smoothing never changes the authoritative collision capsule.
-	camera.position = Vector3(0,1.00 if crouched else 1.64,0)+global_basis.inverse()*correction_offset
+	camera.position = Vector3(0,1.00 if crouched else 1.64,0)
+	update_presentation(delta,Engine.get_physics_interpolation_fraction())
+
+func presentation_camera() -> Camera3D:
+	return render_camera if is_instance_valid(render_camera) else camera
+
+func reset_presentation() -> void:
+	view_previous=global_position; view_current=global_position
+	view_eye=1.00 if crouched else 1.64
+	view_ready=true
+	update_presentation(0,1)
+
+func update_presentation(delta: float, fraction: float) -> void:
+	if not is_instance_valid(render_camera): return
+	# Only translation is interpolated. Aim and all combat queries use the logical camera.
+	if not view_ready or global_position.distance_squared_to(view_current)>4:
+		view_previous=global_position; view_current=global_position; view_ready=true
+	view_eye=lerpf(view_eye,1.00 if crouched else 1.64,1-exp(-18*delta))
+	render_camera.global_transform=Transform3D(camera.global_basis,view_previous.lerp(view_current,clampf(fraction,0,1))+Vector3.UP*view_eye+correction_offset)
+	render_camera.fov=camera.fov
 
 
 func _ready() -> void:
@@ -102,8 +125,15 @@ func _ready() -> void:
 	camera.position.y = 1.64
 	camera.near = 0.045
 	camera.fov = 86.0
-	camera.current = locally_controlled
+	camera.current = false
 	add_child(camera)
+	if locally_controlled:
+		render_camera=Camera3D.new()
+		render_camera.top_level=true
+		render_camera.near=camera.near
+		add_child(render_camera)
+		render_camera.make_current()
+		reset_presentation()
 	_create_hitboxes()
 	viewmodel = Viewmodel.new() if locally_controlled else RemoteView.new()
 	viewmodel.player = self
@@ -146,6 +176,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			equip(i)
 
 func _physics_process(delta: float) -> void:
+	if locally_controlled: view_previous=view_current
 	if locally_controlled and game.net.is_client_ready(): game.net.consume_reconciliation()
 	if not game.active or (game.net.running and not game.net.combat_allowed()):
 		return
@@ -167,6 +198,7 @@ func _physics_process(delta: float) -> void:
 		game.net.simulate_remote(self,delta)
 	else:
 		simulate_movement(delta,move_input,jump_requested,held("crouch"),false)
+	if locally_controlled: view_current=global_position
 	jump_requested = false
 	var flat = Vector2(velocity.x,velocity.z)
 	if locally_controlled and game.net.is_client_ready(): game.net.remember_input(self,move_input,movement_jump)
@@ -449,6 +481,7 @@ func reset_at(pos: Vector3) -> void:
 	look_sway = Vector2.ZERO
 	refill()
 	viewmodel.update_pose(0.0)
+	reset_presentation()
 
 func held(action: String) -> bool:
 	if locally_controlled and game.replays.active: return false

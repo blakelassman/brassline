@@ -216,6 +216,9 @@ func host_test() -> void:
 	freeze()
 	check(await wait_for(func(): return marked("map_loaded")),"Client exits replay and loads voted map")
 	check(game.replays.history.last_clip.is_empty(),"New map cannot reuse an old final kill")
+	game.combat.scores=[0,0,0]; n._end_round()
+	check(await wait_for(func(): return marked("no_kill_result")),"Remote client receives a no-kill match result over ENet")
+	check(game.replays.transitioning() and game.replays.outro_title=="GAME DRAW","Host presents the same no-kill draw")
 	mark("done")
 func client_test() -> void:
 	check(await wait_for(func(): return marked("host")),"Host is available")
@@ -244,4 +247,7 @@ func client_test() -> void:
 	check(await wait_for(func(): return game.current_map==1 and game.net.round_active,18),"Client loads next map after final and vote")
 	check(not game.replays.active and game.replays.ghosts.is_empty(),"Replay ghosts do not leak into the next map")
 	mark("map_loaded")
+	check(await wait_for(func(): return game.replays.transitioning()),"No-kill draw reaches the connected player")
+	check(game.replays.outro_title=="GAME DRAW" and game.replays.pending_final.is_empty(),"No-kill result is viewer-safe and does not fabricate a final kill")
+	mark("no_kill_result")
 	await wait_for(func(): return marked("done"))

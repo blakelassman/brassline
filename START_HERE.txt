@@ -1,4 +1,4 @@
-BRASSLINE 0.13.0 - ARMORY AND POLISH UPDATE
+BRASSLINE 0.13.1 - CAMERA AND PRESENTATION UPDATE
 
 NEW: BRASSLINE_LAUNCHER.bat installs a separate, automatically updatable copy.
 Click Install & Play once, then Update & Play for future versions. Optional:
@@ -38,7 +38,7 @@ ALSO INCLUDED
 GIT SOURCE CHECKOUT
 Keep your existing engine folder beside project.godot, then run START_BRASSLINE.bat.
 Engine binaries are excluded from Git. An existing engine folder survives updates.
-Your friends need the same 0.13.0 source and engine folder, or a full portable package.
+Your friends need the same 0.13.1 source and engine folder, or a full portable package.
 
 
 PLAY
@@ -103,7 +103,7 @@ TDM: immediate respawn. Destroy: return to teammate spectating.
 Disable ordinary death replays in Settings if preferred.
 Final killcams cannot be skipped or disabled. The last hit plays in slow motion
 before the next round or map vote. A round without a recorded kill has no replay.
-Update the host and all clients together (network protocol 14).
+Update the host and all clients together (network protocol 15).
 
 NEW CLASSES / LOADOUTS
 Open LOADOUTS: Vanguard (level 1), Raider SMG (3), Sentinel LMG (6), Marksman DMR (10).
@@ -111,3 +111,9 @@ Selections take effect next life/round. Try every class free in Training.
 Classes keep the existing pistol, sword, sniper and grenades. XP and choices save.
 Settings > Weapon motion adjusts bob, strafe lean and landing movement.
 Round/game results animate over the arena without a black fade.
+
+PRESENTATION UPDATE
+Movement now renders between physics ticks, with immediate mouse aim.
+Crouching eases the viewpoint; respawns reset the camera immediately.
+Round results play even when nobody was killed. The arena stays visible.
+Medium quality includes shadows and FXAA. Low keeps shadows off for performance.

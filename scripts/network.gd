@@ -8,7 +8,7 @@ const Preferences = preload("res://scripts/preferences.gd")
 const LagCompensation = preload("res://scripts/lag_compensation.gd")
 var lag_comp = LagCompensation.new()
 var lag_rescued_hits = 0
-const PROTOCOL = 14
+const PROTOCOL = 15
 var replay_wait: Dictionary = {}
 var final_replay_until = 0.0
 var mode_id = "tdm"
@@ -627,6 +627,10 @@ func _reconcile(row: Array, own: Dictionary) -> void:
 	a.landing_pose = landing
 	last_correction = previous.distance_to(a.position)
 	if last_correction>.2: corrections += 1
+	# Move both interpolation samples with the corrected simulation. The visual
+	# offset cancels this once, avoiding a one-frame double correction.
+	a.view_previous += a.position-previous
+	a.view_current += a.position-previous
 	if last_correction<2.0:
 		a.correction_offset += previous-a.position
 		a.correction_offset = a.correction_offset.limit_length(1.0)
@@ -1155,15 +1159,23 @@ func deliver_death_replay(clip: Dictionary) -> void:
 	if id==1: game.replays.play(clip,false)
 	elif can_send(id): _replay_clip.rpc_id(id,packed,false,round_number,actor.life_id)
 func schedule_final_replay() -> float:
-	if not server or not game.replays.has_final(): return 0.0
-	final_replay_until=game.clock+game.replays.FINAL_LOCK
+	if not server: return 0.0
+	var duration=game.replays.FINAL_LOCK if game.replays.has_final() else game.replays.OUTRO_SECONDS+.3
+	final_replay_until=game.clock+duration
 	_broadcast_final_replay.call_deferred()
-	return game.replays.FINAL_LOCK
+	return duration
 func _broadcast_final_replay() -> void:
 	if not running or not server: return
 	game.replays.flush()
 	var clip=game.replays.history.last_clip
-	if clip.is_empty(): return
+	if clip.is_empty():
+		var winning_team=destroy.last_winner if is_destroy() else (0 if game.combat.scores[1]==game.combat.scores[2] else (1 if game.combat.scores[1]>game.combat.scores[2] else 2))
+		var title=destroy.reason if is_destroy() else winner
+		if not dedicated: game.replays.present_result(title,winning_team,not round_active,game.combat.scores)
+		for id in peers:
+			if id!=1 and can_send(id) and peers[id].loaded: _result_only.rpc_id(id,title,winning_team,not round_active,game.combat.scores,round_number)
+		return
+	clip["result_scores"]=game.combat.scores.duplicate()
 	clip["result_title"] = destroy.reason if is_destroy() else winner
 	clip["result_team"] = destroy.last_winner if is_destroy() else (0 if game.combat.scores[1]==game.combat.scores[2] else (1 if game.combat.scores[1]>game.combat.scores[2] else 2))
 	clip["result_match"] = not round_active
@@ -1172,6 +1184,11 @@ func _broadcast_final_replay() -> void:
 	if not dedicated: game.replays.present_final(clip,clip.result_title)
 	for id in peers:
 		if id!=1 and can_send(id) and peers[id].loaded: _replay_clip.rpc_id(id,packed,true,round_number,slots[peers[id].slot].actor.life_id)
+@rpc("authority","call_remote","reliable",2)
+func _result_only(title: String, winning_team: int, match_over: bool, scores: Array, generation: int) -> void:
+	if server or not running or not session_ready or generation!=round_number: return
+	game.replays.present_result(title,winning_team,match_over,scores)
+
 @rpc("authority","call_remote","reliable",2)
 func _replay_clip(packed: PackedByteArray, mandatory: bool, generation: int, viewer_life: int) -> void:
 	if server or not running or not session_ready or generation!=round_number or viewer_life!=game.player.life_id: return
