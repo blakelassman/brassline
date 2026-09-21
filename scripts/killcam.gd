@@ -11,8 +11,9 @@ const SLOW_RATE = .25
 const REGULAR_PRE_ROLL = 3.0
 const FINAL_PRE_ROLL = 4.0
 const FINAL_AFTER_HIT = .8
-const OUTRO_SECONDS = 1.2
-const FINAL_LOCK = 9.0
+const OUTRO_SECONDS = 2.4
+const RESULT_SETTLE = .3
+const FINAL_LOCK = 9.75
 const DEATH_TIMEOUT = 5.0
 var game: Node
 var history = History.new()
@@ -28,6 +29,7 @@ var outro_left = 0.0
 var outro_title = ""
 var outro_detail = ""
 var outro_outcome = 0
+var outro_scores: Array = [0,0,0]
 var active = false
 var final = false
 var clip: Dictionary = {}
@@ -121,18 +123,21 @@ func has_final() -> bool:
 func present_final(recorded: Dictionary, title: String) -> void:
 	if recorded.is_empty() or recorded.map!=game.current_map or recorded.id<=last_final_id: return
 	if not pending_final.is_empty() and recorded.id<=pending_final.id: return
-	stop(false)
+	present_result(title,int(recorded.get("result_team",0)),recorded.get("result_match",false),recorded.get("result_scores",game.combat.scores))
 	pending_final=recorded.duplicate(true)
+	_build_world() # Prepare scenery while the result is on screen.
+
+func present_result(title: String, winning_team: int, match_over: bool, scores: Array) -> void:
+	stop(false)
 	outro_left=OUTRO_SECONDS
 	outro_detail=title
-	var winning_team=int(recorded.get("result_team",0))
+	outro_scores=scores.duplicate()
 	outro_outcome=0 if winning_team==0 else (1 if winning_team==game.player.team else -1)
-	var scope="GAME" if recorded.get("result_match",false) else "ROUND"
+	var scope="GAME" if match_over else "ROUND"
 	outro_title=scope+(" DRAW" if outro_outcome==0 else (" WON" if outro_outcome>0 else " LOST"))
-	game.sound("ui",-20)
-	_build_world() # Warm static replay scenery during the result window, before the camera cut.
+
 func transitioning() -> bool:
-	return not pending_final.is_empty()
+	return outro_left>0
 func fade_alpha() -> float:
 	return 0.0 # Never cover live play or replays with a black transition.
 func play(recorded: Dictionary, mandatory: bool) -> bool:
@@ -202,11 +207,13 @@ func _copy_static(node: Node) -> void:
 	for child in node.get_children(): _copy_static(child)
 func _process(delta: float) -> void:
 	if transitioning():
+		var before=outro_left
 		outro_left=maxf(0,outro_left-delta)
+		if before>OUTRO_SECONDS-RESULT_SETTLE and outro_left<=OUTRO_SECONDS-RESULT_SETTLE: game.sound("achievement",-19)
 		if outro_left<=0:
 			var recorded=pending_final
 			pending_final={}
-			play(recorded,true)
+			if not recorded.is_empty(): play(recorded,true)
 		return
 	if not active: return
 	elapsed+=delta
@@ -369,5 +376,4 @@ func stop(resume: bool = false) -> void:
 		elif game.mode=="combat": game.combat.respawn_player()
 func reset() -> void:
 	stop(false); history.clear(); last_death_id=-1; last_final_id=-1; flush_queued=false
-	if is_instance_valid(scenery): scenery.queue_free(); scenery=null
-	cached_world_id=0
+	# Static scenery survives round resets; _build_world replaces it only on a map change.

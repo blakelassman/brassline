@@ -65,8 +65,8 @@ static func textured(color: Color, kind: String, world: bool = true) -> Standard
 	mat.normal_enabled = true
 	mat.normal_texture = normals[kind]
 	mat.normal_scale = .12 if kind=="gun" else .4
-	mat.roughness = .48 if kind in ["metal","panel","gun"] else .88
-	mat.metallic = .35 if kind in ["metal","panel","gun"] else 0
+	mat.roughness = .64 if kind=="gun" else (.55 if kind in ["metal","panel"] else .88)
+	mat.metallic = .22 if kind=="gun" else (.35 if kind in ["metal","panel"] else 0)
 	mat.uv1_triplanar = world
 	mat.uv1_world_triplanar = world
 	mat.uv1_scale = Vector3.ONE*.5 if world else Vector3.ONE*2

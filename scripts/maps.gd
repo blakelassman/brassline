@@ -29,21 +29,21 @@ static func environment(parent: Node3D, index: int) -> void:
 	env.background_mode = Environment.BG_SKY
 	var sky = Sky.new()
 	var sky_mat = ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = [Color("699eaf"),Color("447b96"),Color("629cad"),Color("182c48")][index]
+	sky_mat.sky_top_color = [Color("778e9a"),Color("5c788c"),Color("629cad"),Color("182c48")][index]
 	sky_mat.sky_horizon_color = [Color("d5ded2"),Color("c8d2c8"),Color("ebcf9f"),Color("71939e")][index]
 	sky_mat.ground_bottom_color = Color("4d5860")
 	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("c3d9ec")
+	env.ambient_light_color = Color("cdd7de")
 	env.ambient_light_energy = .44 if index==3 else .25
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env_node.environment = env
 	parent.add_child(env_node)
 	var sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48,-32 if index!=2 else 28,0)
-	sun.light_color = Color("ffe6bd") if index!=3 else Color("a2d7eb")
+	sun.light_color = Color("fff0d9") if index!=3 else Color("a2d7eb")
 	sun.light_energy = .64 if index!=3 else .6
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 65

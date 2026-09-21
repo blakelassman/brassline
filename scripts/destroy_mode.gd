@@ -287,7 +287,7 @@ func view_tick(delta: float) -> void:
 			net._objective_hold.rpc_id(1,game.player.life_id,game.player.held("interact"))
 	if info.phase!=last_phase:
 		last_phase = info.phase
-		if info.phase in ["planted","intermission","match_over"]: game.sound("achievement",-16)
+		if info.phase=="planted": game.sound("achievement",-16)
 	if info.phase=="planted" and game.clock-last_beep>clampf((info.deadline-game.clock)/60.0,.16,1):
 		last_beep = game.clock
 		game.world_sound("tick",info.planted,-12,false)
@@ -303,7 +303,7 @@ func view_tick(delta: float) -> void:
 func _update_spectator() -> void:
 	var game = net.game
 	if game.player.health>0 or net.dedicated:
-		if is_instance_valid(spectator): spectator.queue_free(); spectator = null; game.player.camera.make_current()
+		if is_instance_valid(spectator): spectator.queue_free(); spectator = null; game.player.presentation_camera().make_current()
 		return
 	game.player.viewmodel.root.hide()
 	if not is_instance_valid(spectator):
@@ -339,6 +339,6 @@ func _update_spectator() -> void:
 func reset_view() -> void:
 	if is_instance_valid(spectator): spectator.queue_free(); spectator = null
 	if is_instance_valid(bomb_visual): bomb_visual.queue_free(); bomb_visual = null
-	if is_instance_valid(net.game.player): net.game.player.camera.make_current()
+	if is_instance_valid(net.game.player): net.game.player.presentation_camera().make_current()
 	remote.clear()
 	last_phase = ""

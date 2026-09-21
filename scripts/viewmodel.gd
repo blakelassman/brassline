@@ -61,9 +61,9 @@ func _ready() -> void:
 	viewport.add_child(shell_root)
 	root = Node3D.new()
 	viewport.add_child(root)
-	var dark = Color("263740")
-	var cream = Color("8ba1a3")
-	var gold = Color("b88a45")
+	var dark = Color("292f32")
+	var cream = Color("657074")
+	var gold = Color("928064")
 	for index in range(4):
 		var model = Node3D.new()
 		root.add_child(model)

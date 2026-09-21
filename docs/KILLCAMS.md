@@ -1,4 +1,4 @@
-# Killcams (0.13.0)
+# Killcams (0.13.1)
 
 ## Player behavior
 
@@ -8,7 +8,7 @@
 - In Destroy and Diffuse, skipping/finishing returns to teammate spectating. You remain eliminated until the next round.
 - Settings → Death killcams disables ordinary death replays only.
 - Online TDM matches and individual Destroy rounds end with the last recorded kill from that match/round. Everyone watches the same first-person final replay; it cannot be skipped or disabled. The last 0.65 seconds before the hit play at 0.25 speed, followed by a brief hit hold.
-- Round endings show an animated result banner for 1.2 seconds over the live arena, then start the replay. Wins and losses are relative to each viewer; game-ending results use GAME instead of ROUND. No full-screen black fade occurs before or after playback. Finals have a nine-second server transition window, including a network margin. Map voting gets its full 15 seconds afterward; Destroy retains its six-second result interval afterward. No recorded kill means no fabricated final replay. A bomb/timeout result uses the last actual kill if one exists.
+- Round endings show an animated result banner for 2.4 seconds (including a 0.3-second last-hit settling interval) over the live arena, then start the replay. Wins and losses are relative to each viewer; game-ending results use GAME instead of ROUND. No full-screen black fade occurs before or after playback. Finals have a 9.75-second server transition window, including a network margin. Map voting gets its full 15 seconds afterward; Destroy retains its six-second result interval afterward. No recorded kill still shows the full result, then moves on without a fabricated final replay. A bomb/timeout result uses the last actual kill if one exists.
 
 ## Implementation
 
@@ -20,7 +20,7 @@ The recorded scope FOV and weapon finishes are used. A separate weapon viewport 
 
 Compressed clips travel on a reliable ENet channel, capped at 128 KiB compressed / 512 KiB decoded. The source ring is capped at 96 frames / 512 shot events. Clip IDs, map generation and viewer life reject duplicate/stale delivery. Server checks validate skip requests against the current dead life, and finals block combat/early votes until their server deadline. Scenery is cached for the current map; ghosts and history are cleared on round/session transitions.
 
-Network protocol is **14**. Update the server and all players together. Existing profiles remain compatible; the new death-killcam setting defaults on.
+Network protocol is **15**. Update the server and all players together. Existing profiles remain compatible; the new death-killcam setting defaults on.
 
 ## Verification
 

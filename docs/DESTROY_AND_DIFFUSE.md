@@ -5,7 +5,7 @@ Server. Joining still uses a public IP/hostname, UDP port and optional password.
 Both ends select the same mode; a mismatch gives a specific error. This update
 does not add a global matchmaking directory. TDM remains a separate selection.
 
-Everyone updates through the launcher. Network protocol is now **14**; old
+Everyone updates through the launcher. Network protocol is now **15**; old
 clients cannot join. Your profile, XP, inventory and existing UDP rule carry over.
 Dedicated hosts set `mode="destroy"` in their existing `server.cfg`; omitted mode
 continues to mean TDM. The launcher preserves your server configuration.

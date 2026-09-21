@@ -131,6 +131,8 @@ func _ready() -> void:
 		call_deferred("_lagcomp_test")
 	elif "--prediction-test" in args:
 		call_deferred("_prediction_test")
+	elif "--presentation-test" in args:
+		call_deferred("_presentation_test")
 	elif "--armory-test" in args:
 		call_deferred("_armory_test")
 	elif "--killcam-test" in args:
@@ -159,7 +161,7 @@ func _ready() -> void:
 		call_deferred("_self_test")
 	elif Array(args).any(func(arg): return arg.begins_with("--capture")):
 		call_deferred("_capture")
-	print("BRASSLINE ready | multiplayer prototype 0.13.0 | Godot ", Engine.get_version_info()["string"])
+	print("BRASSLINE ready | multiplayer prototype 0.13.1 | Godot ", Engine.get_version_info()["string"])
 
 func _training_targets() -> void:
 	var names = ["WALL PEEK","STRAFE","HIGH GROUND","CLOSE RANGE","TEAMMATE","COLLATERAL A","COLLATERAL B"]
@@ -273,6 +275,7 @@ func start_mode(selected: String, map_index: int = -1) -> void:
 	else:
 		player.reset_at(launch_pad)
 		if not net.server: player.set_physics_process(false)
+	if not net.dedicated: replays._build_world() # Cache replay scenery while loading, not on the first kill.
 	has_started = true
 	start_ambience()
 	apply_settings()
@@ -706,7 +709,7 @@ func _capture() -> void:
 			replays.history.last_clip["result_team"]=player.team
 			combat.scores=[0,3,2]
 			replays.present_final(replays.history.last_clip,"ENEMY TEAM ELIMINATED")
-			replays._process(.25)
+			replays._process(.95)
 		else:
 			replays.play(replays.history.last_clip,true)
 			replays.elapsed=1.0
@@ -910,7 +913,16 @@ func apply_settings() -> void:
 	audio_mix.apply(prefs.data)
 	Engine.max_fps = int(prefs.data.fps_limit)
 	get_viewport().msaa_3d = Viewport.MSAA_2X if prefs.data.quality==2 else Viewport.MSAA_DISABLED
-	for light in world_root.find_children("*","DirectionalLight3D",true,false): light.shadow_enabled = prefs.data.quality==2
+	get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if prefs.data.quality==1 else Viewport.SCREEN_SPACE_AA_DISABLED
+	for light in world_root.find_children("*","DirectionalLight3D",true,false):
+		light.shadow_enabled = prefs.data.quality>=1
+		light.directional_shadow_mode=DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS if prefs.data.quality==2 else DirectionalLight3D.SHADOW_ORTHOGONAL
+		light.directional_shadow_max_distance=65 if prefs.data.quality==2 else 38
+	if is_instance_valid(replays.scenery):
+		for light in replays.scenery.find_children("*","DirectionalLight3D",true,false):
+			light.shadow_enabled=prefs.data.quality>=1
+			light.directional_shadow_mode=DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS if prefs.data.quality==2 else DirectionalLight3D.SHADOW_ORTHOGONAL
+			light.directional_shadow_max_distance=65 if prefs.data.quality==2 else 38
 func apply_display_settings() -> void:
 	# Window mode changes only on startup or Apply Display, never on match load.
 	if DisplayServer.get_name()=="headless": return
@@ -995,3 +1007,8 @@ func _armory_test() -> void:
 	var suite=load("res://tests/test_armory.gd").new()
 	add_child(suite)
 	await suite.run(self)
+
+func _presentation_test() -> void:
+	var suite=load("res://tests/test_presentation.gd").new()
+	add_child(suite)
+	suite.run(self)

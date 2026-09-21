@@ -7,9 +7,9 @@ var menu: PanelContainer
 var resume_button: Button
 var help_visible = false
 var font: Font
-var ink = Color("f4ecd7")
-var gold = Color("f1bd58")
-var dim = Color("acc0c5")
+var ink = Color("e7ecee")
+var gold = Color("d8b877")
+var dim = Color("a1adb5")
 var crosshair_gap = 5.0
 var display_health = 100.0
 
@@ -107,7 +107,7 @@ func _draw() -> void:
 	if not game.active or game.menu_open:
 		draw_rect(Rect2(Vector2.ZERO,size),Color(0.04,0.10,0.13,0.76))
 		return
-	if game.replays.transitioning():
+	if game.replays.transitioning() and game.replays.OUTRO_SECONDS-game.replays.outro_left>=game.replays.RESULT_SETTLE:
 		_draw_result()
 		return
 	if game.replays.active:
@@ -120,10 +120,14 @@ func _draw() -> void:
 	_draw_minimap()
 	_draw_medal()
 	if game.mode in ["combat","online"]:
-		centered("%d   :   %d" % [game.combat.scores[1],game.combat.scores[2]],42,26,ink)
+		var cx=w*.5
+		draw_style_box(_panel_style(),Rect2(cx-100,16,200,40))
+		draw_line(Vector2(cx-100,56),Vector2(cx-5,56),Color("69a5b4"),2)
+		draw_line(Vector2(cx+5,56),Vector2(cx+100,56),Color("bd8275"),2)
+		centered("%d     :     %d" % [game.combat.scores[1],game.combat.scores[2]],45,24,ink)
 	if game.net.running and not game.net.is_destroy():
 		var seconds = maxi(0,ceili(game.net.round_end-game.clock)) if game.net.round_active else 0
-		centered("%02d:%02d" % [seconds/60,seconds%60],65,14,dim)
+		centered("%02d:%02d" % [seconds/60,seconds%60],77,13,dim)
 	if game.net.is_client_ready() and Time.get_ticks_msec()-game.net.last_packet>750:
 		centered("CONNECTION INTERRUPTED",92,14,gold)
 	var center = size / 2.0
@@ -169,10 +173,12 @@ func _draw() -> void:
 		if fuse <= Rules.PERFECT_WINDOW: centered("JUMP",y-10,16,gold)
 	if game.mode in ["combat","online"]:
 		if p.hurt_flash>0:
-			draw_rect(Rect2(Vector2.ZERO,size),Color(.8,.10,.04,p.hurt_flash*.35))
-			draw_rect(Rect2(3,3,w-6,h-6),Color(.95,.18,.07,p.hurt_flash*2),false,6)
+			# Edge-only damage feedback leaves the opponent and reticle readable.
+			for edge in range(8):
+				var inset=float(edge)*4
+				draw_rect(Rect2(inset,inset,w-inset*2,h-inset*2),Color(.65,.19,.14,p.hurt_flash*(1-edge/8.0)*.45),false,4)
 
-	if game.net.is_destroy(): _draw_objective()
+	if game.net.is_destroy() and not game.replays.transitioning(): _draw_objective()
 	_draw_xp()
 	if Input.is_action_pressed("scoreboard"): _draw_scoreboard()
 
@@ -342,7 +348,7 @@ func _draw_objective() -> void:
 				text_at("A" if i==0 else "B",screen+Vector2(-5,5),16,gold)
 	if info.phase=="intermission":
 		centered(info.reason,size.y*.32,28,gold)
-		centered(("HALFTIME • SWITCHING SIDES  /  " if info.round==2 else "NEXT ROUND  /  ")+"%ds" % maxi(0,ceili(info.next-game.clock)),size.y*.32+28,16,ink)
+		centered(("HALFTIME • SWITCHING SIDES  /  " if info.round==5 else "NEXT ROUND  /  ")+"%ds" % maxi(0,ceili(info.next-game.clock)),size.y*.32+28,16,ink)
 	elif info.phase=="planted":
 		centered("BOMB PLANTED AT "+("A" if info.site==0 else "B"),113,18,Color("ff9570"))
 	if game.player.health<=0:
@@ -389,18 +395,52 @@ func _draw_killcam() -> void:
 	if replay.hit_played:
 		for dir in [Vector2(-1,-1),Vector2(1,-1),Vector2(-1,1),Vector2(1,1)]: draw_line(size*.5+dir*14,size*.5+dir*22,gold if replay.clip.head else ink,2)
 
+var result_backing: GradientTexture2D
+var panel_style: StyleBoxFlat
+func _panel_style() -> StyleBoxFlat:
+	if panel_style==null:
+		panel_style=StyleBoxFlat.new()
+		panel_style.bg_color=Color(.055,.065,.08,.65)
+		panel_style.set_corner_radius_all(2)
+	return panel_style
+
+func _result_text(value: String, x: float, y: float, font_size: int, color: Color) -> void:
+	var width=font.get_string_size(value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+	draw_string_outline(font,Vector2(x-width*.5,y),value,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,3,Color(0,0,0,color.a*.45))
+	text_at(value,Vector2(x-width*.5,y),font_size,color)
+
 func _draw_result() -> void:
 	var replay=game.replays
-	var age=replay.OUTRO_SECONDS-replay.outro_left
-	var enter=1-pow(1-clampf(age/.24,0,1),3)
-	var alpha=minf(clampf(age/.14,0,1),clampf(replay.outro_left/.16,0,1))
-	var tint=Color("6cddd1") if replay.outro_outcome>0 else (Color("ed977f") if replay.outro_outcome<0 else gold)
-	var y=size.y*.33+18*(1-enter)
-	var half=minf(290,size.x*.34)*enter
-	draw_rect(Rect2(size.x*.5-half,y-27,half*2,137),Color(.05,.10,.13,.72*alpha))
-	draw_line(Vector2(size.x*.5-half,y-27),Vector2(size.x*.5+half,y-27),Color(tint,alpha),2)
-	centered(replay.outro_title,y+12,32,Color(tint,alpha))
+	var age=replay.OUTRO_SECONDS-replay.outro_left-replay.RESULT_SETTLE
+	if age<=0: return # Let the lethal hit land before the announcement.
+	var enter=1-pow(1-clampf(age/.35,0,1),3)
+	var alpha=minf(clampf(age/.2,0,1),clampf(replay.outro_left/.2,0,1))
+	var tint=gold if replay.outro_outcome>0 else (Color("c99086") if replay.outro_outcome<0 else dim)
+	var cx=size.x*.5
+	var y=size.y*.24+12*(1-enter)
+	# Smooth alpha across the announcement, with the arena visible underneath.
+	if result_backing==null:
+		result_backing=GradientTexture2D.new()
+		result_backing.width=512; result_backing.height=1
+		result_backing.gradient=Gradient.new()
+		result_backing.gradient.offsets=PackedFloat32Array([0,.25,.75,1])
+		result_backing.gradient.colors=PackedColorArray([Color(.035,.045,.055,0),Color(.035,.045,.055,.65),Color(.035,.045,.055,.65),Color(.035,.045,.055,0)])
+		result_backing.fill_from=Vector2.ZERO; result_backing.fill_to=Vector2(1,0)
+	draw_texture_rect(result_backing,Rect2(cx-390,y-22,780,230),false,Color(1,1,1,alpha))
+	var span=260*enter
+	draw_line(Vector2(cx-span,y+49),Vector2(cx-36,y+49),Color(tint,alpha*.6),1)
+	draw_line(Vector2(cx+36,y+49),Vector2(cx+span,y+49),Color(tint,alpha*.6),1)
+	# Original rank chevrons: quiet, legible at every resolution.
+	for i in range(2):
+		var sy=y+39+i*11
+		draw_polyline(PackedVector2Array([Vector2(cx-18,sy),Vector2(cx,sy+9),Vector2(cx+18,sy)]),Color(tint,alpha),2,true)
+	centered(replay.outro_title,y+21,42,Color(ink,alpha))
 	var team=game.player.team
-	centered("%d  :  %d" % [game.combat.scores[team],game.combat.scores[3-team]],y+49,26,Color(ink,alpha))
-	centered(replay.outro_detail,y+73,12,Color(dim,alpha))
-	centered("FINAL KILL",y+96,10,Color(dim,alpha*.8))
+	_result_text(str(replay.outro_scores[team]),cx-88,y+114,44,Color(ink,alpha))
+	_result_text(str(replay.outro_scores[3-team]),cx+88,y+114,44,Color(ink,alpha*.8))
+	_result_text("YOUR TEAM",cx-88,y+138,10,Color(dim,alpha))
+	_result_text("OPPOSITION",cx+88,y+138,10,Color(dim,alpha))
+	draw_line(Vector2(cx,y+83),Vector2(cx,y+122),Color(dim,alpha*.3),1)
+	centered(replay.outro_detail,y+169,13,Color(ink,alpha*.9))
+	var next="FINAL KILL REPLAY" if not replay.pending_final.is_empty() else "ROUND COMPLETE"
+	centered(next,y+192,10,Color(dim,alpha*.8))

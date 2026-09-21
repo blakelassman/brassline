@@ -37,36 +37,39 @@ static func armor(parent: Node3D, at: Vector3, size: Vector3, color: Color) -> N
 
 static func build(parent: Node3D, color: Color, variant: int) -> Dictionary:
 	var root = joint(parent,Vector3.ZERO)
-	var dark = Color("253b49")
-	var light = color.lightened(.22)
+	var dark = Color("303638")
+	var team_color=color.lerp(Color("778487"),.55)
+	var shell=Color("555e60")
+	var light = Color("899393")
 	var pelvis = Geo.box(root,Vector3(0,.68,0),Vector3(.46,.19,.30),dark,false,"rubber")
 	var torso = joint(root,Vector3(0,1.06,0))
 	armor(torso,Vector3.ZERO,Vector3(.56,.59,.32),dark)
-	armor(torso,Vector3(0,.045,.14),Vector3(.57,.43,.12),color)
-	Geo.box(torso,Vector3(0,.10,.205),Vector3(.35,.09,.035),light)
+	armor(torso,Vector3(0,.045,.14),Vector3(.53,.43,.12),shell)
+	Geo.box(torso,Vector3(0,.10,.205),Vector3(.30,.065,.035),team_color)
 	for x in [-.16,.16]:
-		Geo.box(torso,Vector3(x,-.18,.17),Vector3(.13,.16,.1),Color("b3a57f"),false,"rubber")
+		Geo.box(torso,Vector3(x,-.18,.17),Vector3(.13,.16,.1),Color("707267"),false,"rubber")
 	Geo.box(torso,Vector3(0,-.25,.02),Vector3(.58,.08,.35),Color("67747a"),false,"metal")
 	Geo.cylinder(root,Vector3(0,1.43,0),.1,.12,dark)
 	var head = joint(root,Vector3(0,1.68,0))
-	Geo.sphere(head,Vector3.ZERO,.225,color)
-	Geo.box(head,Vector3(0,.015,.195),Vector3(.34,.13,.08),Color("122837"))
-	Geo.box(head,Vector3(0,.015,.241),Vector3(.27,.045,.018),Color("9bdad6") if variant!=2 else Color("f5d68a"))
+	var helmet=Geo.sphere(head,Vector3(0,.035,0),.225,shell)
+	helmet.scale=Vector3(1,.88,1)
+	Geo.box(head,Vector3(0,.015,.195),Vector3(.32,.10,.045),Color("122837"))
+	Geo.box(head,Vector3(0,.015,.222),Vector3(.27,.055,.012),Color("647e81") if variant!=2 else Color("8c805f"))
 	Geo.box(head,Vector3(0,-.13,.13),Vector3(.25,.12,.17),dark)
 	if variant==0:
-		Geo.box(head,Vector3(0,.15,.015),Vector3(.35,.12,.35),color.darkened(.1))
+		Geo.box(head,Vector3(0,.18,.0),Vector3(.12,.025,.28),shell.darkened(.12))
 	elif variant==1:
 		Geo.box(head,Vector3(0,.11,.03),Vector3(.45,.06,.35),light)
 		Geo.box(torso,Vector3(.24,0,-.20),Vector3(.15,.43,.15),light)
 	else:
-		Geo.box(torso,Vector3(0,.05,-.25),Vector3(.44,.55,.26),color,false,"panel")
+		Geo.box(torso,Vector3(0,.05,-.25),Vector3(.44,.55,.26),shell,false,"panel")
 		Geo.box(head,Vector3(-.2,.05,.16),Vector3(.1,.12,.15),Color("d6bb77"))
 	# Helmet ear cups, collar, armored shoulders and textile seams.
 	for side in [-1,1]:
 		var ear = Geo.cylinder(head,Vector3(side*.215,0,0),.085,.045,dark)
 		ear.rotation.z = PI/2
 		Geo.box(torso,Vector3(side*.23,.05,.21),Vector3(.045,.34,.025),light)
-		armor(root,Vector3(side*.4,1.32,0),Vector3(.28,.17,.29),color)
+		armor(root,Vector3(side*.4,1.32,0),Vector3(.24,.14,.25),team_color)
 	Geo.cylinder(root,Vector3(0,1.40,0),.18,.08,light)
 	var legs: Array = []
 	var knees: Array = []
@@ -76,20 +79,23 @@ static func build(parent: Node3D, color: Color, variant: int) -> Dictionary:
 		var leg = joint(root,Vector3(side*.18,.67,0))
 		armor(leg,Vector3(0,-.14,0),Vector3(.23,.30,.26),dark)
 		var knee = joint(leg,Vector3(0,-.30,0))
-		Geo.box(knee,Vector3(0,-.07,.11),Vector3(.18,.18,.08),color)
+		Geo.box(knee,Vector3(0,-.07,.11),Vector3(.18,.18,.08),shell)
 		armor(knee,Vector3(0,-.14,0),Vector3(.19,.29,.23),dark)
-		Geo.box(knee,Vector3(0,-.28,.06),Vector3(.22,.14,.34),Color("182e3a"),false,"rubber")
+		Geo.box(knee,Vector3(0,-.28,.06),Vector3(.22,.14,.34),Color("272d2e"),false,"rubber")
 		legs.append(leg)
 		knees.append(knee)
 		var arm = joint(root,Vector3(side*.39,1.29,0))
-		Geo.sphere(arm,Vector3.ZERO,.145,color)
-		armor(arm,Vector3(0,-.13,0),Vector3(.20,.26,.22),color if variant!=1 else dark)
+		Geo.sphere(arm,Vector3.ZERO,.125,dark)
+		armor(arm,Vector3(0,-.13,0),Vector3(.20,.26,.22),shell if variant!=1 else dark)
 		var elbow = joint(arm,Vector3(0,-.27,0))
 		armor(elbow,Vector3(0,-.12,0),Vector3(.18,.25,.20),dark)
-		Geo.box(elbow,Vector3(0,-.27,.015),Vector3(.15,.13,.18),Color("78928f"),false,"rubber")
+		Geo.box(elbow,Vector3(0,-.27,.015),Vector3(.15,.13,.18),Color("474e4c"),false,"rubber")
 		arms.append(arm)
 		elbows.append(elbow)
-	Geo.finish_weapon(root)
+	# Fabric and ceramic armor should not inherit a weapon's glossy metal finish.
+	for side in [-1,1]:
+		Geo.box(torso,Vector3(side*.24,.12,-.17),Vector3(.045,.25,.025),team_color)
+	Geo.box(torso,Vector3(0,.15,-.17),Vector3(.25,.07,.035),team_color)
 	return {"root":root,"torso":torso,"head":head,"pelvis":pelvis,"legs":legs,"knees":knees,"arms":arms,"elbows":elbows}
 
 static func animate(rig: Dictionary, speed: float, clock: float, hit: float, reload: float, shot: float, armed: bool) -> void:
@@ -98,8 +104,8 @@ static func animate(rig: Dictionary, speed: float, clock: float, hit: float, rel
 	var phase = clock*(9.5+stride*2)
 	for i in range(2):
 		var walk = sin(phase+i*PI)*stride
-		rig.legs[i].rotation.x = walk*.55
-		rig.knees[i].rotation.x = maxf(0,-walk)*.55
+		rig.legs[i].rotation.x = walk*.43
+		rig.knees[i].rotation.x = maxf(0,-walk)*.46
 		rig.arms[i].rotation.x = -.95 if armed else -walk*.35
 		rig.arms[i].rotation.z = (-.1 if i==0 else .1)
 		rig.elbows[i].rotation.x = -.8 if armed else -.15
@@ -110,4 +116,4 @@ static func animate(rig: Dictionary, speed: float, clock: float, hit: float, rel
 			rig.arms[0].rotation.x = -.45+sin(clock*8)*.2
 			rig.elbows[0].rotation.x = -1.6
 			rig.arms[1].rotation.z = -.2
-	rig.torso.rotation = Vector3(hit*.20,0,sin(phase)*stride*.035)
+	rig.torso.rotation = Vector3(hit*.20,0,sin(phase)*stride*.018)
